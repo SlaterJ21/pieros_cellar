@@ -19,11 +19,19 @@ import {
     Dialog,
 } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery } from '@apollo/client/react';
+import { useQuery, useMutation } from '@apollo/client/react';
 import { File, Paths } from 'expo-file-system/next';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { GET_WINES } from '@/graphql/queries/wines';
+import { GET_WINERIES } from '@/graphql/queries/wineries';
+import { GET_VARIETALS } from '@/graphql/queries/varietals';
+import {
+    IMPORT_WINERIES,
+    IMPORT_VARIETALS,
+    IMPORT_WINES,
+    IMPORT_COMPLETE_COLLECTION
+} from '@/graphql/mutations/import';
 import { useFocusEffect } from '@react-navigation/native';
 import { notifySettingsChanged } from '@/hooks/useSettings';
 
@@ -97,13 +105,27 @@ const SettingsScreen = () => {
     const [resetDialogVisible, setResetDialogVisible] = useState(false);
     const [aboutDialogVisible, setAboutDialogVisible] = useState(false);
 
-    // Fetch all wines without limit for export - use a large number or fetch in batches
-    const { data: winesData, refetch } = useQuery(GET_WINES, {
-        variables: { take: 10000, skip: 0 }, // Fetch up to 10,000 wines
-        fetchPolicy: 'network-only', // Always get fresh data for export
+    // Fetch all data for export
+    const { data: winesData, refetch: refetchWines } = useQuery(GET_WINES, {
+        variables: { take: 10000, skip: 0 },
+        fetchPolicy: 'network-only',
     });
 
-    // Helper function to fetch ALL wines if collection is very large
+    const { data: wineriesData, refetch: refetchWineries } = useQuery(GET_WINERIES, {
+        fetchPolicy: 'network-only',
+    });
+
+    const { data: varietalsData, refetch: refetchVarietals } = useQuery(GET_VARIETALS, {
+        fetchPolicy: 'network-only',
+    });
+
+    // Import mutations
+    const [importWineriesMutation] = useMutation(IMPORT_WINERIES);
+    const [importVarietalsMutation] = useMutation(IMPORT_VARIETALS);
+    const [importWinesMutation] = useMutation(IMPORT_WINES);
+    const [importCompleteMutation] = useMutation(IMPORT_COMPLETE_COLLECTION);
+
+    // Helper function to fetch ALL wines in batches
     const fetchAllWines = async () => {
         const allWines: any[] = [];
         let skip = 0;
@@ -112,13 +134,12 @@ const SettingsScreen = () => {
 
         try {
             while (hasMore) {
-                const result = await refetch({ take: batchSize, skip });
+                const result = await refetchWines({ take: batchSize, skip });
 
                 if (result.data?.wines && result.data.wines.length > 0) {
                     allWines.push(...result.data.wines);
                     skip += batchSize;
 
-                    // If we got less than batchSize, we've reached the end
                     if (result.data.wines.length < batchSize) {
                         hasMore = false;
                     }
@@ -130,7 +151,6 @@ const SettingsScreen = () => {
             return allWines;
         } catch (error) {
             console.error('Error fetching all wines:', error);
-            // Fall back to whatever data we have
             return winesData?.wines || [];
         }
     };
@@ -149,7 +169,6 @@ const SettingsScreen = () => {
 
     const loadSettings = async () => {
         try {
-            // Map storage keys to settings keys
             const storageToSettingsMap: Record<keyof typeof SETTINGS_KEYS, keyof Settings> = {
                 DEFAULT_BOTTLE_SIZE: 'defaultBottleSize',
                 DEFAULT_WINE_TYPE: 'defaultWineType',
@@ -171,7 +190,6 @@ const SettingsScreen = () => {
                 const value = await AsyncStorage.getItem(storageKey);
                 if (value !== null) {
                     const settingKey = storageToSettingsMap[key as keyof typeof SETTINGS_KEYS];
-                    // Parse boolean values
                     if (value === 'true' || value === 'false') {
                         loadedSettings[settingKey] = value === 'true';
                     } else {
@@ -191,7 +209,6 @@ const SettingsScreen = () => {
     const saveSetting = async (key: keyof typeof SETTINGS_KEYS, value: string | boolean) => {
         try {
             await AsyncStorage.setItem(SETTINGS_KEYS[key], String(value));
-            // Notify all listeners that settings have changed
             notifySettingsChanged();
         } catch (error) {
             console.error('Error saving setting:', error);
@@ -202,7 +219,6 @@ const SettingsScreen = () => {
     const updateSetting = (key: keyof Settings, value: any) => {
         setSettings(prev => ({ ...prev, [key]: value }));
 
-        // Map setting key to storage key
         const storageKeyMap: Record<string, keyof typeof SETTINGS_KEYS> = {
             defaultBottleSize: 'DEFAULT_BOTTLE_SIZE',
             defaultWineType: 'DEFAULT_WINE_TYPE',
@@ -225,17 +241,226 @@ const SettingsScreen = () => {
     };
 
     const exportData = async () => {
-        if (!winesData?.wines) {
-            Alert.alert('No Data', 'No wines to export');
-            return;
-        }
-
         setExporting(true);
         try {
-            // Show progress
-            Alert.alert('Preparing Export', 'Fetching all wines from your collection...');
+            Alert.alert('Preparing Export', 'Fetching all data from your collection...');
 
-            // Fetch all wines in batches to ensure we get everything
+            // Fetch all data
+            const allWines = await fetchAllWines();
+            await refetchWineries();
+            await refetchVarietals();
+
+            const wineries = wineriesData?.wineries || [];
+            const varietals = varietalsData?.varietals || [];
+
+            if (allWines.length === 0 && wineries.length === 0 && varietals.length === 0) {
+                Alert.alert('No Data', 'No data found to export');
+                setExporting(false);
+                return;
+            }
+
+            // Clean and structure the export data
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                version: '2.0',
+                summary: {
+                    totalWines: allWines.length,
+                    totalWineries: wineries.length,
+                    totalVarietals: varietals.length,
+                },
+                wines: allWines.map(wine => ({
+                    id: wine.id,
+                    name: wine.name,
+                    vintage: wine.vintage,
+                    wineryId: wine.wineryId,
+                    wineryName: wine.winery?.name,
+                    varietalId: wine.varietalId,
+                    varietalName: wine.varietal?.name,
+                    region: wine.region,
+                    subRegion: wine.subRegion,
+                    country: wine.country,
+                    appellation: wine.appellation,
+                    type: wine.type,
+                    sweetness: wine.sweetness,
+                    quantity: wine.quantity,
+                    bottleSize: wine.bottleSize,
+                    purchaseDate: wine.purchaseDate,
+                    purchasePrice: wine.purchasePrice,
+                    purchaseLocation: wine.purchaseLocation,
+                    retailer: wine.retailer,
+                    location: wine.location,
+                    binNumber: wine.binNumber,
+                    rackNumber: wine.rackNumber,
+                    cellarZone: wine.cellarZone,
+                    drinkFrom: wine.drinkFrom,
+                    drinkTo: wine.drinkTo,
+                    peakDrinking: wine.peakDrinking,
+                    personalRating: wine.personalRating,
+                    criticsRating: wine.criticsRating,
+                    criticName: wine.criticName,
+                    personalNotes: wine.personalNotes,
+                    tastingNotes: wine.tastingNotes,
+                    currentValue: wine.currentValue,
+                    estimatedValue: wine.estimatedValue,
+                    status: wine.status,
+                    tags: wine.tags?.map((tag: any) => tag.name),
+                    createdAt: wine.createdAt,
+                    updatedAt: wine.updatedAt,
+                })),
+                wineries: wineries.map((winery: any) => ({
+                    id: winery.id,
+                    name: winery.name,
+                    region: winery.region,
+                    country: winery.country,
+                    website: winery.website,
+                    description: winery.description,
+                    email: winery.email,
+                    phone: winery.phone,
+                    foundedYear: winery.foundedYear,
+                    logo: winery.logo,
+                    createdAt: winery.createdAt,
+                    updatedAt: winery.updatedAt,
+                })),
+                varietals: varietals.map((varietal: any) => ({
+                    id: varietal.id,
+                    name: varietal.name,
+                    type: varietal.type,
+                    description: varietal.description,
+                    commonRegions: varietal.commonRegions,
+                    characteristics: varietal.characteristics,
+                    aliases: varietal.aliases,
+                    createdAt: varietal.createdAt,
+                    updatedAt: varietal.updatedAt,
+                })),
+            };
+
+            const jsonString = JSON.stringify(exportData, null, 2);
+            const fileName = `wine_cellar_complete_export_${new Date().toISOString().split('T')[0]}.json`;
+
+            const file = new File(Paths.cache, fileName);
+            await file.write(jsonString);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(file.uri, {
+                    mimeType: 'application/json',
+                    dialogTitle: `Export Complete Collection (${allWines.length} wines, ${wineries.length} wineries, ${varietals.length} varietals)`,
+                });
+            } else {
+                Alert.alert(
+                    'Success',
+                    `Exported:\n${allWines.length} wines\n${wineries.length} wineries\n${varietals.length} varietals`
+                );
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            Alert.alert('Error', 'Failed to export data');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const exportWineriesOnly = async () => {
+        setExporting(true);
+        try {
+            await refetchWineries();
+            const wineries = wineriesData?.wineries || [];
+
+            if (wineries.length === 0) {
+                Alert.alert('No Data', 'No wineries found to export');
+                setExporting(false);
+                return;
+            }
+
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                version: '2.0',
+                type: 'wineries',
+                wineries: wineries.map((winery: any) => ({
+                    name: winery.name,
+                    region: winery.region,
+                    country: winery.country,
+                    website: winery.website,
+                    description: winery.description,
+                    email: winery.email,
+                    phone: winery.phone,
+                    foundedYear: winery.foundedYear,
+                    logo: winery.logo,
+                })),
+            };
+
+            const jsonString = JSON.stringify(exportData, null, 2);
+            const fileName = `wineries_export_${new Date().toISOString().split('T')[0]}.json`;
+
+            const file = new File(Paths.cache, fileName);
+            await file.write(jsonString);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(file.uri, {
+                    mimeType: 'application/json',
+                    dialogTitle: `Export Wineries (${wineries.length})`,
+                });
+            } else {
+                Alert.alert('Success', `Exported ${wineries.length} wineries`);
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            Alert.alert('Error', 'Failed to export wineries');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const exportVarietalsOnly = async () => {
+        setExporting(true);
+        try {
+            await refetchVarietals();
+            const varietals = varietalsData?.varietals || [];
+
+            if (varietals.length === 0) {
+                Alert.alert('No Data', 'No varietals found to export');
+                setExporting(false);
+                return;
+            }
+
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                version: '2.0',
+                type: 'varietals',
+                varietals: varietals.map((varietal: any) => ({
+                    name: varietal.name,
+                    type: varietal.type,
+                    description: varietal.description,
+                    commonRegions: varietal.commonRegions,
+                    characteristics: varietal.characteristics,
+                    aliases: varietal.aliases,
+                })),
+            };
+
+            const jsonString = JSON.stringify(exportData, null, 2);
+            const fileName = `varietals_export_${new Date().toISOString().split('T')[0]}.json`;
+
+            const file = new File(Paths.cache, fileName);
+            await file.write(jsonString);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(file.uri, {
+                    mimeType: 'application/json',
+                    dialogTitle: `Export Varietals (${varietals.length})`,
+                });
+            } else {
+                Alert.alert('Success', `Exported ${varietals.length} varietals`);
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            Alert.alert('Error', 'Failed to export varietals');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const exportWinesOnly = async () => {
+        setExporting(true);
+        try {
             const allWines = await fetchAllWines();
 
             if (allWines.length === 0) {
@@ -246,46 +471,71 @@ const SettingsScreen = () => {
 
             const exportData = {
                 exportDate: new Date().toISOString(),
-                version: '1.0',
-                totalWines: allWines.length,
-                wines: allWines,
+                version: '2.0',
+                type: 'wines',
+                wines: allWines.map((wine: any) => ({
+                    name: wine.name,
+                    wineryName: wine.winery?.name,
+                    varietalName: wine.varietal?.name,
+                    vintage: wine.vintage,
+                    region: wine.region,
+                    subRegion: wine.subRegion,
+                    country: wine.country,
+                    appellation: wine.appellation,
+                    type: wine.type,
+                    sweetness: wine.sweetness,
+                    quantity: wine.quantity,
+                    bottleSize: wine.bottleSize,
+                    purchaseDate: wine.purchaseDate,
+                    purchasePrice: wine.purchasePrice,
+                    purchaseLocation: wine.purchaseLocation,
+                    retailer: wine.retailer,
+                    location: wine.location,
+                    binNumber: wine.binNumber,
+                    rackNumber: wine.rackNumber,
+                    cellarZone: wine.cellarZone,
+                    drinkFrom: wine.drinkFrom,
+                    drinkTo: wine.drinkTo,
+                    peakDrinking: wine.peakDrinking,
+                    personalRating: wine.personalRating,
+                    criticsRating: wine.criticsRating,
+                    criticName: wine.criticName,
+                    personalNotes: wine.personalNotes,
+                    tastingNotes: wine.tastingNotes,
+                    currentValue: wine.currentValue,
+                    estimatedValue: wine.estimatedValue,
+                    status: wine.status,
+                    tags: wine.tags?.map((tag: any) => tag.name),
+                })),
             };
 
             const jsonString = JSON.stringify(exportData, null, 2);
-            const fileName = `wine_cellar_export_${new Date().toISOString().split('T')[0]}.json`;
+            const fileName = `wines_export_${new Date().toISOString().split('T')[0]}.json`;
 
-            // Use new FileSystem API
             const file = new File(Paths.cache, fileName);
             await file.write(jsonString);
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(file.uri, {
                     mimeType: 'application/json',
-                    dialogTitle: `Export Wine Collection (${allWines.length} wines)`,
+                    dialogTitle: `Export Wines (${allWines.length})`,
                 });
             } else {
-                Alert.alert('Success', `Exported ${allWines.length} wines to ${fileName}`);
+                Alert.alert('Success', `Exported ${allWines.length} wines`);
             }
         } catch (error) {
             console.error('Export error:', error);
-            Alert.alert('Error', 'Failed to export data');
+            Alert.alert('Error', 'Failed to export wines');
         } finally {
             setExporting(false);
         }
     };
 
     const exportCSV = async () => {
-        if (!winesData?.wines) {
-            Alert.alert('No Data', 'No wines to export');
-            return;
-        }
-
         setExporting(true);
         try {
-            // Show progress
             Alert.alert('Preparing Export', 'Fetching all wines from your collection...');
 
-            // Fetch all wines in batches to ensure we get everything
             const allWines = await fetchAllWines();
 
             if (allWines.length === 0) {
@@ -294,32 +544,92 @@ const SettingsScreen = () => {
                 return;
             }
 
-            // CSV Headers
+            // Comprehensive CSV Headers
             const headers = [
-                'Name', 'Vintage', 'Varietal', 'Type', 'Winery', 'Region', 'Country',
-                'Quantity', 'Purchase Price', 'Current Value', 'Bottle Size', 'Status'
+                'Name',
+                'Vintage',
+                'Varietal',
+                'Type',
+                'Sweetness',
+                'Winery',
+                'Region',
+                'Sub Region',
+                'Country',
+                'Appellation',
+                'Quantity',
+                'Bottle Size',
+                'Purchase Date',
+                'Purchase Price',
+                'Purchase Location',
+                'Retailer',
+                'Current Value',
+                'Estimated Value',
+                'Location',
+                'Bin Number',
+                'Rack Number',
+                'Cellar Zone',
+                'Drink From',
+                'Drink To',
+                'Peak Drinking',
+                'Personal Rating',
+                'Critics Rating',
+                'Critic Name',
+                'Personal Notes',
+                'Tasting Notes',
+                'Status',
+                'Tags',
             ].join(',');
 
-            // CSV Rows
-            const rows = allWines.map((wine: any) => [
-                `"${wine.name || ''}"`,
-                wine.vintage || '',
-                `"${wine.varietal || ''}"`,
-                wine.type || '',
-                `"${wine.winery?.name || ''}"`,
-                `"${wine.region || ''}"`,
-                `"${wine.country || ''}"`,
-                wine.quantity || 0,
-                wine.purchasePrice || '',
-                wine.currentValue || '',
-                wine.bottleSize || '',
-                wine.status || '',
-            ].join(','));
+            // CSV Rows with all fields
+            const rows = allWines.map((wine: any) => {
+                const escapeCsv = (value: any) => {
+                    if (value === null || value === undefined) return '';
+                    const str = String(value);
+                    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                        return `"${str.replace(/"/g, '""')}"`;
+                    }
+                    return str;
+                };
+
+                return [
+                    escapeCsv(wine.name),
+                    escapeCsv(wine.vintage),
+                    escapeCsv(wine.varietal?.name),
+                    escapeCsv(wine.type),
+                    escapeCsv(wine.sweetness),
+                    escapeCsv(wine.winery?.name),
+                    escapeCsv(wine.region),
+                    escapeCsv(wine.subRegion),
+                    escapeCsv(wine.country),
+                    escapeCsv(wine.appellation),
+                    escapeCsv(wine.quantity),
+                    escapeCsv(wine.bottleSize),
+                    escapeCsv(wine.purchaseDate),
+                    escapeCsv(wine.purchasePrice),
+                    escapeCsv(wine.purchaseLocation),
+                    escapeCsv(wine.retailer),
+                    escapeCsv(wine.currentValue),
+                    escapeCsv(wine.estimatedValue),
+                    escapeCsv(wine.location),
+                    escapeCsv(wine.binNumber),
+                    escapeCsv(wine.rackNumber),
+                    escapeCsv(wine.cellarZone),
+                    escapeCsv(wine.drinkFrom),
+                    escapeCsv(wine.drinkTo),
+                    escapeCsv(wine.peakDrinking),
+                    escapeCsv(wine.personalRating),
+                    escapeCsv(wine.criticsRating),
+                    escapeCsv(wine.criticName),
+                    escapeCsv(wine.personalNotes),
+                    escapeCsv(wine.tastingNotes),
+                    escapeCsv(wine.status),
+                    escapeCsv(wine.tags?.map((t: any) => t.name).join('; ')),
+                ].join(',');
+            });
 
             const csvString = [headers, ...rows].join('\n');
             const fileName = `wine_cellar_export_${new Date().toISOString().split('T')[0]}.csv`;
 
-            // Use new FileSystem API
             const file = new File(Paths.cache, fileName);
             await file.write(csvString);
 
@@ -339,7 +649,7 @@ const SettingsScreen = () => {
         }
     };
 
-    const importData = async () => {
+    const importWineries = async () => {
         setImporting(true);
         try {
             const result = await DocumentPicker.getDocumentAsync({
@@ -349,26 +659,253 @@ const SettingsScreen = () => {
 
             if (result.assets && result.assets.length > 0) {
                 const fileUri = result.assets[0].uri;
-
-                // Use new FileSystem API
                 const file = new File(fileUri);
                 const fileContent = await file.text();
                 const importedData = JSON.parse(fileContent);
 
-                if (importedData.wines && Array.isArray(importedData.wines)) {
-                    Alert.alert(
-                        'Import Data',
-                        `Found ${importedData.wines.length} wines. This feature requires backend implementation to create wines from imported data.`,
-                        [{ text: 'OK' }]
-                    );
-                } else {
-                    Alert.alert('Invalid File', 'The selected file does not contain valid wine data');
+                const wineries = importedData.wineries || [];
+                if (wineries.length === 0) {
+                    Alert.alert('No Data', 'No wineries found in file');
+                    setImporting(false);
+                    return;
                 }
+
+                Alert.alert(
+                    'Confirm Import',
+                    `Import ${wineries.length} wineries? Existing wineries with the same name will be updated.`,
+                    [
+                        { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
+                        {
+                            text: 'Import',
+                            onPress: async () => {
+                                try {
+                                    const response = await importWineriesMutation({
+                                        variables: { wineries },
+                                    });
+
+                                    const result = response.data.importWineries;
+                                    await refetchWineries();
+
+                                    Alert.alert(
+                                        'Import Complete',
+                                        `Imported: ${result.imported}\nUpdated: ${result.skipped}\nErrors: ${result.errors.length}${result.errors.length > 0 ? '\n\n' + result.errors.join('\n') : ''}`
+                                    );
+                                } catch (error: any) {
+                                    console.error('Import error:', error);
+                                    Alert.alert('Import Failed', error.message);
+                                } finally {
+                                    setImporting(false);
+                                }
+                            },
+                        },
+                    ]
+                );
+            } else {
+                setImporting(false);
             }
         } catch (error) {
             console.error('Import error:', error);
-            Alert.alert('Error', 'Failed to import data');
-        } finally {
+            Alert.alert('Error', 'Failed to read import file');
+            setImporting(false);
+        }
+    };
+
+    const importVarietals = async () => {
+        setImporting(true);
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: 'application/json',
+                copyToCacheDirectory: true,
+            });
+
+            if (result.assets && result.assets.length > 0) {
+                const fileUri = result.assets[0].uri;
+                const file = new File(fileUri);
+                const fileContent = await file.text();
+                const importedData = JSON.parse(fileContent);
+
+                const varietals = importedData.varietals || [];
+                if (varietals.length === 0) {
+                    Alert.alert('No Data', 'No varietals found in file');
+                    setImporting(false);
+                    return;
+                }
+
+                Alert.alert(
+                    'Confirm Import',
+                    `Import ${varietals.length} varietals? Existing varietals with the same name will be updated.`,
+                    [
+                        { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
+                        {
+                            text: 'Import',
+                            onPress: async () => {
+                                try {
+                                    const response = await importVarietalsMutation({
+                                        variables: { varietals },
+                                    });
+
+                                    const result = response.data.importVarietals;
+                                    await refetchVarietals();
+
+                                    Alert.alert(
+                                        'Import Complete',
+                                        `Imported: ${result.imported}\nUpdated: ${result.skipped}\nErrors: ${result.errors.length}${result.errors.length > 0 ? '\n\n' + result.errors.join('\n') : ''}`
+                                    );
+                                } catch (error: any) {
+                                    console.error('Import error:', error);
+                                    Alert.alert('Import Failed', error.message);
+                                } finally {
+                                    setImporting(false);
+                                }
+                            },
+                        },
+                    ]
+                );
+            } else {
+                setImporting(false);
+            }
+        } catch (error) {
+            console.error('Import error:', error);
+            Alert.alert('Error', 'Failed to read import file');
+            setImporting(false);
+        }
+    };
+
+    const importWines = async () => {
+        setImporting(true);
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: 'application/json',
+                copyToCacheDirectory: true,
+            });
+
+            if (result.assets && result.assets.length > 0) {
+                const fileUri = result.assets[0].uri;
+                const file = new File(fileUri);
+                const fileContent = await file.text();
+                const importedData = JSON.parse(fileContent);
+
+                const wines = importedData.wines || [];
+                if (wines.length === 0) {
+                    Alert.alert('No Data', 'No wines found in file');
+                    setImporting(false);
+                    return;
+                }
+
+                Alert.alert(
+                    'Confirm Import',
+                    `Import ${wines.length} wines? Wineries and varietals will be created if they don't exist.`,
+                    [
+                        { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
+                        {
+                            text: 'Import',
+                            onPress: async () => {
+                                try {
+                                    const response = await importWinesMutation({
+                                        variables: { wines },
+                                    });
+
+                                    const result = response.data.importWines;
+                                    await refetchWines();
+                                    await refetchWineries();
+                                    await refetchVarietals();
+
+                                    Alert.alert(
+                                        'Import Complete',
+                                        `Imported: ${result.imported}\nErrors: ${result.errors.length}${result.errors.length > 0 ? '\n\n' + result.errors.slice(0, 5).join('\n') + (result.errors.length > 5 ? `\n...and ${result.errors.length - 5} more` : '') : ''}`
+                                    );
+                                } catch (error: any) {
+                                    console.error('Import error:', error);
+                                    Alert.alert('Import Failed', error.message);
+                                } finally {
+                                    setImporting(false);
+                                }
+                            },
+                        },
+                    ]
+                );
+            } else {
+                setImporting(false);
+            }
+        } catch (error) {
+            console.error('Import error:', error);
+            Alert.alert('Error', 'Failed to read import file');
+            setImporting(false);
+        }
+    };
+
+    const importCompleteCollection = async () => {
+        setImporting(true);
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: 'application/json',
+                copyToCacheDirectory: true,
+            });
+
+            if (result.assets && result.assets.length > 0) {
+                const fileUri = result.assets[0].uri;
+                const file = new File(fileUri);
+                const fileContent = await file.text();
+                const importedData = JSON.parse(fileContent);
+
+                const wineries = importedData.wineries || [];
+                const varietals = importedData.varietals || [];
+                const wines = importedData.wines || [];
+
+                if (wineries.length === 0 && varietals.length === 0 && wines.length === 0) {
+                    Alert.alert('No Data', 'No data found in file');
+                    setImporting(false);
+                    return;
+                }
+
+                Alert.alert(
+                    'Confirm Import',
+                    `Import complete collection?\n\n• ${wineries.length} wineries\n• ${varietals.length} varietals\n• ${wines.length} wines\n\nThis may take a few moments...`,
+                    [
+                        { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
+                        {
+                            text: 'Import',
+                            onPress: async () => {
+                                try {
+                                    const response = await importCompleteMutation({
+                                        variables: {
+                                            input: { wineries, varietals, wines },
+                                        },
+                                    });
+
+                                    const result = response.data.importCompleteCollection;
+                                    await refetchWines();
+                                    await refetchWineries();
+                                    await refetchVarietals();
+
+                                    const totalErrors =
+                                        result.wineries.errors.length +
+                                        result.varietals.errors.length +
+                                        result.wines.errors.length;
+
+                                    Alert.alert(
+                                        'Import Complete',
+                                        `Wineries: ${result.wineries.imported} imported, ${result.wineries.skipped} updated\n` +
+                                        `Varietals: ${result.varietals.imported} imported, ${result.varietals.skipped} updated\n` +
+                                        `Wines: ${result.wines.imported} imported\n` +
+                                        `Total Errors: ${totalErrors}`
+                                    );
+                                } catch (error: any) {
+                                    console.error('Import error:', error);
+                                    Alert.alert('Import Failed', error.message);
+                                } finally {
+                                    setImporting(false);
+                                }
+                            },
+                        },
+                    ]
+                );
+            } else {
+                setImporting(false);
+            }
+        } catch (error) {
+            console.error('Import error:', error);
+            Alert.alert('Error', 'Failed to read import file');
             setImporting(false);
         }
     };
@@ -391,7 +928,6 @@ const SettingsScreen = () => {
                 lowQuantityThreshold: '3',
             });
             setResetDialogVisible(false);
-            // Notify all listeners that settings have changed
             notifySettingsChanged();
             Alert.alert('Success', 'Settings have been reset to defaults');
         } catch (error) {
@@ -404,8 +940,6 @@ const SettingsScreen = () => {
         try {
             await Share.share({
                 message: 'Check out this amazing Wine Cellar Management app!',
-                // In production, add actual app store link
-                // url: 'https://apps.apple.com/...'
             });
         } catch (error) {
             console.error('Share error:', error);
@@ -680,30 +1214,84 @@ const SettingsScreen = () => {
 
             {/* Data Management */}
             <List.Section>
-                <List.Subheader style={styles.sectionHeader}>Data Management</List.Subheader>
+                <List.Subheader style={styles.sectionHeader}>Export Data</List.Subheader>
 
                 <List.Item
-                    title="Export as JSON"
-                    description="Export full collection data"
+                    title="Export Complete Collection"
+                    description="Wines, wineries, and varietals (JSON)"
                     left={props => <List.Icon {...props} icon="export" />}
                     onPress={exportData}
-                    disabled={exporting}
+                    disabled={exporting || importing}
                 />
 
                 <List.Item
-                    title="Export as CSV"
-                    description="Export collection to spreadsheet"
+                    title="Export Wines Only"
+                    description="All wines as JSON"
+                    left={props => <List.Icon {...props} icon="bottle-wine" />}
+                    onPress={exportWinesOnly}
+                    disabled={exporting || importing}
+                />
+
+                <List.Item
+                    title="Export Wineries Only"
+                    description="All wineries as JSON"
+                    left={props => <List.Icon {...props} icon="domain" />}
+                    onPress={exportWineriesOnly}
+                    disabled={exporting || importing}
+                />
+
+                <List.Item
+                    title="Export Varietals Only"
+                    description="All varietals as JSON"
+                    left={props => <List.Icon {...props} icon="fruit-grapes" />}
+                    onPress={exportVarietalsOnly}
+                    disabled={exporting || importing}
+                />
+
+                <List.Item
+                    title="Export Wines as CSV"
+                    description="Spreadsheet format"
                     left={props => <List.Icon {...props} icon="file-delimited" />}
                     onPress={exportCSV}
-                    disabled={exporting}
+                    disabled={exporting || importing}
+                />
+            </List.Section>
+
+            <Divider />
+
+            <List.Section>
+                <List.Subheader style={styles.sectionHeader}>Import Data</List.Subheader>
+
+                <List.Item
+                    title="Import Complete Collection"
+                    description="Import full collection (JSON)"
+                    left={props => <List.Icon {...props} icon="import" />}
+                    onPress={importCompleteCollection}
+                    disabled={exporting || importing}
                 />
 
                 <List.Item
-                    title="Import Data"
-                    description="Import wines from JSON file"
-                    left={props => <List.Icon {...props} icon="import" />}
-                    onPress={importData}
-                    disabled={importing}
+                    title="Import Wines"
+                    description="Import wines from JSON"
+                    left={props => <List.Icon {...props} icon="bottle-wine" />}
+                    onPress={importWines}
+                    disabled={exporting || importing}
+                />
+
+                <List.Item
+                    title="Import Wineries"
+                    description="Import wineries from JSON"
+                    left={props => <List.Icon {...props} icon="domain" />}
+                    onPress={importWineries}
+                    disabled={exporting || importing}
+                />
+
+                <List.Item
+                    title="Import Varietals"
+                    description="Import varietals from JSON"
+                    left={props => <List.Icon {...props} icon="fruit-grapes" />}
+                    onPress={importVarietals}
+                    disabled={exporting || importing}
                 />
 
                 <List.Item
@@ -722,7 +1310,7 @@ const SettingsScreen = () => {
 
                 <List.Item
                     title="App Version"
-                    description="1.0.0"
+                    description="2.0.0"
                     left={props => <List.Icon {...props} icon="information" />}
                 />
 
@@ -791,10 +1379,11 @@ const SettingsScreen = () => {
                             Features include:
                         </Text>
                         <Text style={styles.bulletPoint}>• Collection tracking and organization</Text>
+                        <Text style={styles.bulletPoint}>• Winery and varietal management</Text>
                         <Text style={styles.bulletPoint}>• Investment and valuation monitoring</Text>
                         <Text style={styles.bulletPoint}>• Drinking window recommendations</Text>
                         <Text style={styles.bulletPoint}>• Detailed statistics and insights</Text>
-                        <Text style={styles.bulletPoint}>• Data export and backup</Text>
+                        <Text style={styles.bulletPoint}>• Complete data export and backup</Text>
                         <Text style={[styles.aboutText, styles.copyrightText]}>
                             © 2024 Wine Cellar App. All rights reserved.
                         </Text>

@@ -205,17 +205,17 @@ export default function VarietalDetailScreen() {
                         <View style={styles.statsGrid}>
                             <View style={styles.statItem}>
                                 <MaterialCommunityIcons name="bottle-wine" size={32} color="#8B2E2E" />
-                                <Text style={styles.statValue}>{varietal.wines.length}</Text>
+                                <Text style={styles.statValue}>{varietal.wines.length.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
                                 <Text style={styles.statLabel}>Wines</Text>
                             </View>
                             <View style={styles.statItem}>
                                 <MaterialCommunityIcons name="numeric" size={32} color="#4CAF50" />
-                                <Text style={styles.statValue}>{totalBottles}</Text>
+                                <Text style={styles.statValue}>{totalBottles.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
                                 <Text style={styles.statLabel}>Bottles</Text>
                             </View>
                             <View style={styles.statItem}>
                                 <MaterialCommunityIcons name="currency-usd" size={32} color="#2196F3" />
-                                <Text style={styles.statValue}>${totalValue.toFixed(0)}</Text>
+                                <Text style={styles.statValue}>${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
                                 <Text style={styles.statLabel}>Total Value</Text>
                             </View>
                         </View>

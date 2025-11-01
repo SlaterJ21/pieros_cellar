@@ -37,20 +37,20 @@ model Winery {
 model Varietal {
   id            String      @id @default(uuid())
   name          String      @unique
-  
+
   // Additional metadata
   type          WineType?   // Typical wine type for this varietal
   description   String?     @db.Text
-  
+
   // Common regions (informational)
   commonRegions String[]    // Array of common regions
-  
+
   // Characteristics
   characteristics String[]  // e.g., ["Full-bodied", "High tannins", "Dark fruit"]
-  
+
   // Aliases and alternate names
   aliases       String[]    // e.g., ["Shiraz"] for Syrah
-  
+
   wines         Wine[]
 
   createdAt     DateTime    @default(now())
@@ -68,11 +68,11 @@ model Wine {
   winery        Winery      @relation(fields: [wineryId], references: [id])
   wineryId      String
   vintage       Int?
-  
+
   // Changed from String? to relation
   varietal      Varietal?   @relation(fields: [varietalId], references: [id])
   varietalId    String?
-  
+
   region        String?
   subRegion     String?
   country       String?

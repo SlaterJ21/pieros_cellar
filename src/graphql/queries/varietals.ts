@@ -1,3 +1,5 @@
+// graphql/queries/varietals.ts
+
 import { gql } from '@apollo/client';
 
 export const GET_VARIETALS = gql`
@@ -10,12 +12,26 @@ export const GET_VARIETALS = gql`
             commonRegions
             characteristics
             aliases
+            wines {
+                id
+                quantity
+                currentValue
+                winery {
+                    id
+                    name
+                }
+                photos {
+                    id
+                    url
+                    isPrimary
+                }
+            }
             createdAt
+            updatedAt
         }
     }
 `;
 
-// Get a single varietal with its wines
 export const GET_VARIETAL = gql`
     query GetVarietal($id: ID!) {
         varietal(id: $id) {
@@ -30,6 +46,11 @@ export const GET_VARIETAL = gql`
                 id
                 name
                 vintage
+                quantity
+                currentValue
+                purchasePrice
+                status
+                type
                 winery {
                     id
                     name
@@ -39,8 +60,6 @@ export const GET_VARIETAL = gql`
                     url
                     isPrimary
                 }
-                quantity
-                status
             }
             createdAt
             updatedAt
@@ -48,7 +67,6 @@ export const GET_VARIETAL = gql`
     }
 `;
 
-// Get varietal by name
 export const GET_VARIETAL_BY_NAME = gql`
     query GetVarietalByName($name: String!) {
         varietalByName(name: $name) {
@@ -56,8 +74,11 @@ export const GET_VARIETAL_BY_NAME = gql`
             name
             type
             description
+            commonRegions
             characteristics
             aliases
+            createdAt
+            updatedAt
         }
     }
 `;

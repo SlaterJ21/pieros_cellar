@@ -131,6 +131,8 @@ export default function VarietalsScreen() {
 
     const varietals: Varietal[] = data?.varietals || [];
 
+    console.log('Varietals data:', varietals[0]);
+
     // Filter varietals by search query
     const filteredVarietals = varietals.filter(varietal =>
         varietal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

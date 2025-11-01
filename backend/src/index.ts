@@ -7,7 +7,7 @@ import multer from 'multer';
 import multerS3 from 'multer-s3';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
-import { generatePresignedUrl } from './utils/s3-presigned';
+import { resolvers } from './resolvers';
 
 const prisma = new PrismaClient({
     log: ['query', 'error', 'warn'],
@@ -63,7 +63,7 @@ const upload = multer({
     },
 });
 
-const typeDefs = `
+export const typeDefs = `
   scalar DateTime
   scalar Decimal
 
@@ -231,6 +231,42 @@ const typeDefs = `
     count: Int!
   }
 
+  # Import Result Types
+  type ImportResult {
+    imported: Int!
+    skipped: Int!
+    errors: [String!]!
+  }
+
+  type WineryImportResult {
+    imported: Int!
+    skipped: Int!
+    errors: [String!]!
+    wineries: [Winery!]!
+  }
+
+  type VarietalImportResult {
+    imported: Int!
+    skipped: Int!
+    errors: [String!]!
+    varietals: [Varietal!]!
+  }
+
+  type WineImportResult {
+    imported: Int!
+    skipped: Int!
+    errors: [String!]!
+    wines: [Wine!]!
+  }
+
+  type CompleteCollectionImportResult {
+    wineries: ImportResult!
+    varietals: ImportResult!
+    wines: ImportResult!
+    tags: ImportResult!
+  }
+
+  # Input Types
   input CreateVarietalInput {
     name: String!
     type: WineType
@@ -310,559 +346,132 @@ const typeDefs = `
     search: String
   }
 
+  # Import Input Types
+  input ImportWineryInput {
+    name: String!
+    region: String
+    country: String
+    website: String
+    description: String
+    email: String
+    phone: String
+    foundedYear: Int
+    logo: String
+  }
+
+  input ImportVarietalInput {
+    name: String!
+    type: WineType
+    description: String
+    commonRegions: [String!]
+    characteristics: [String!]
+    aliases: [String!]
+  }
+
+  input ImportWineInput {
+    name: String!
+    wineryName: String!
+    varietalName: String
+    vintage: Int
+    region: String
+    subRegion: String
+    country: String
+    appellation: String
+    type: WineType!
+    sweetness: Sweetness
+    quantity: Int
+    bottleSize: BottleSize
+    purchaseDate: String
+    purchasePrice: Float
+    purchaseLocation: String
+    retailer: String
+    location: String
+    binNumber: String
+    rackNumber: String
+    cellarZone: String
+    drinkFrom: Int
+    drinkTo: Int
+    peakDrinking: Int
+    personalRating: Int
+    criticsRating: Int
+    criticName: String
+    personalNotes: String
+    tastingNotes: String
+    currentValue: Float
+    estimatedValue: Float
+    status: WineStatus
+    tags: [String!]
+  }
+
+  input ImportCompleteCollectionInput {
+    wineries: [ImportWineryInput!]
+    varietals: [ImportVarietalInput!]
+    wines: [ImportWineInput!]
+  }
+
   type Query {
+    # Wine Queries
     wines(filter: WineFilterInput, skip: Int, take: Int): [Wine!]!
     wine(id: ID!): Wine
     wineStats: WineStats!
     
+    # Winery Queries
     wineries(search: String): [Winery!]!
     winery(id: ID!): Winery
     
+    # Varietal Queries
     varietals(type: WineType, search: String): [Varietal!]!
     varietal(id: ID!): Varietal
     varietalByName(name: String!): Varietal
     
+    # Other Queries
     tags: [Tag!]!
     cellarLocations: [CellarLocation!]!
   }
 
   type Mutation {
+    # Wine Mutations
     createWine(input: WineInput!): Wine!
     updateWine(id: ID!, input: WineInput!): Wine!
     deleteWine(id: ID!): Wine!
     updateWineQuantity(id: ID!, quantity: Int!): Wine!
     
+    # Winery Mutations
     createWinery(input: WineryInput!): Winery!
     updateWinery(id: ID!, input: WineryInput!): Winery!
     deleteWinery(id: ID!): Winery!
     
+    # Varietal Mutations
     createVarietal(input: CreateVarietalInput!): Varietal!
     updateVarietal(id: ID!, input: UpdateVarietalInput!): Varietal!
     deleteVarietal(id: ID!): Boolean!
     
+    # Tag Mutations
     createTag(name: String!, color: String): Tag!
     deleteTag(id: ID!): Tag!
     
+    # Photo Mutations
     addPhotoToWine(wineId: ID!, url: String!, s3Key: String, type: PhotoType, caption: String, isPrimary: Boolean): Photo!
     updatePhoto(id: ID!, caption: String, type: PhotoType): Photo!
     deletePhoto(id: ID!): Photo!
     setPrimaryPhoto(id: ID!): Photo!
     
+    # Cellar Location Mutations
     createCellarLocation(name: String!, description: String, capacity: Int, temperature: String, humidity: String): CellarLocation!
     
+    # Legacy CSV Import (if you want to keep it)
     importWinesFromCSV(csvData: String!): [Wine!]!
+    
+    # Import Mutations (NEW!)
+    importWinery(input: ImportWineryInput!): Winery!
+    importVarietal(input: ImportVarietalInput!): Varietal!
+    importWine(input: ImportWineInput!): Wine!
+    importWineries(wineries: [ImportWineryInput!]!): WineryImportResult!
+    importVarietals(varietals: [ImportVarietalInput!]!): VarietalImportResult!
+    importWines(wines: [ImportWineInput!]!): WineImportResult!
+    importCompleteCollection(input: ImportCompleteCollectionInput!): CompleteCollectionImportResult!
   }
 `;
-
-const resolvers = {
-    Query: {
-        // Varietal Queries
-        varietals: async (_parent: any, args: { type?: string; search?: string }) => {
-            const { type, search } = args;
-
-            return await prisma.varietal.findMany({
-                where: {
-                    ...(type && { type: type as any }),
-                    ...(search && {
-                        OR: [
-                            { name: { contains: search, mode: 'insensitive' } },
-                            { aliases: { has: search } },
-                        ],
-                    }),
-                },
-                orderBy: { name: 'asc' },
-            });
-        },
-
-        varietal: async (_parent: any, args: { id: string }) => {
-            return await prisma.varietal.findUnique({
-                where: { id: args.id },
-                include: {
-                    wines: {
-                        include: {
-                            winery: true,
-                            photos: {
-                                where: { isPrimary: true },
-                                take: 1,
-                            },
-                        },
-                    },
-                },
-            });
-        },
-
-        varietalByName: async (_parent: any, args: { name: string }) => {
-            return await prisma.varietal.findUnique({
-                where: { name: args.name },
-            });
-        },
-
-        // Wine Queries
-        wines: async (_: any, { filter, skip = 0, take = 100 }: any) => {
-            const where: any = {};
-
-            if (filter) {
-                if (filter.type) where.type = filter.type;
-                if (filter.country) where.country = { contains: filter.country, mode: 'insensitive' };
-                if (filter.region) where.region = { contains: filter.region, mode: 'insensitive' };
-                if (filter.status) where.status = filter.status;
-                if (filter.wineryId) where.wineryId = filter.wineryId;
-                if (filter.varietalId) where.varietalId = filter.varietalId;
-                if (filter.minVintage || filter.maxVintage) {
-                    where.vintage = {};
-                    if (filter.minVintage) where.vintage.gte = filter.minVintage;
-                    if (filter.maxVintage) where.vintage.lte = filter.maxVintage;
-                }
-                if (filter.search) {
-                    where.OR = [
-                        { name: { contains: filter.search, mode: 'insensitive' } },
-                        { winery: { name: { contains: filter.search, mode: 'insensitive' } } },
-                        { varietal: { name: { contains: filter.search, mode: 'insensitive' } } },
-                    ];
-                }
-            }
-
-            return await prisma.wine.findMany({
-                where,
-                skip,
-                take,
-                include: {
-                    winery: true,
-                    varietal: true,
-                    tags: true,
-                    photos: true
-                },
-                orderBy: { createdAt: 'desc' },
-            });
-        },
-
-        wine: async (_: any, { id }: { id: string }) => {
-            return await prisma.wine.findUnique({
-                where: { id },
-                include: {
-                    winery: true,
-                    varietal: true,
-                    tags: true,
-                    photos: true
-                },
-            });
-        },
-
-        wineStats: async () => {
-            const wines = await prisma.wine.findMany({
-                where: { status: { not: 'CONSUMED' } },
-            });
-
-            const totalBottles = wines.reduce((sum, wine) => sum + wine.quantity, 0);
-            const totalValue = wines.reduce((sum, wine) => {
-                const price = wine.currentValue || wine.purchasePrice || 0;
-                return sum + (Number(price) * wine.quantity);
-            }, 0);
-
-            const byType = await prisma.wine.groupBy({
-                by: ['type'],
-                _count: { id: true },
-                where: { status: { not: 'CONSUMED' } },
-            });
-
-            const byCountry = await prisma.wine.groupBy({
-                by: ['country'],
-                _count: { id: true },
-                where: {
-                    status: { not: 'CONSUMED' },
-                    country: { not: null },
-                },
-            });
-
-            const currentYear = new Date().getFullYear();
-            const readyToDrink = await prisma.wine.count({
-                where: {
-                    status: { not: 'CONSUMED' },
-                    OR: [
-                        { drinkFrom: { lte: currentYear } },
-                        { drinkFrom: null },
-                    ],
-                },
-            });
-
-            return {
-                totalBottles,
-                totalValue,
-                byType: byType.map(t => ({ type: t.type, count: t._count.id })),
-                byCountry: byCountry.map(c => ({ country: c.country, count: c._count.id })),
-                readyToDrink,
-            };
-        },
-
-        // Winery Queries
-        wineries: async (_: any, { search }: { search?: string }) => {
-            const where = search ? {
-                name: { contains: search, mode: 'insensitive' as const }
-            } : {};
-
-            return await prisma.winery.findMany({
-                where,
-                include: { wines: true },
-                orderBy: { name: 'asc' },
-            });
-        },
-
-        winery: async (_: any, { id }: { id: string }) => {
-            return await prisma.winery.findUnique({
-                where: { id },
-                include: { wines: true },
-            });
-        },
-
-        // Other Queries
-        tags: async () => {
-            return await prisma.tag.findMany({
-                include: { wines: true },
-                orderBy: { name: 'asc' },
-            });
-        },
-
-        cellarLocations: async () => {
-            return await prisma.cellarLocation.findMany({
-                orderBy: { name: 'asc' },
-            });
-        },
-    },
-
-    Mutation: {
-        // Varietal Mutations
-        createVarietal: async (_parent: any, args: { input: any }) => {
-            const { input } = args;
-
-            return await prisma.varietal.create({
-                data: {
-                    name: input.name,
-                    type: input.type,
-                    description: input.description,
-                    commonRegions: input.commonRegions || [],
-                    characteristics: input.characteristics || [],
-                    aliases: input.aliases || [],
-                },
-            });
-        },
-
-        updateVarietal: async (_parent: any, args: { id: string; input: any }) => {
-            const { id, input } = args;
-
-            return await prisma.varietal.update({
-                where: { id },
-                data: {
-                    ...(input.name && { name: input.name }),
-                    ...(input.type !== undefined && { type: input.type }),
-                    ...(input.description !== undefined && { description: input.description }),
-                    ...(input.commonRegions !== undefined && { commonRegions: input.commonRegions }),
-                    ...(input.characteristics !== undefined && { characteristics: input.characteristics }),
-                    ...(input.aliases !== undefined && { aliases: input.aliases }),
-                },
-            });
-        },
-
-        deleteVarietal: async (_parent: any, args: { id: string }) => {
-            const { id } = args;
-
-            // Check if any wines are using this varietal
-            const wineCount = await prisma.wine.count({
-                where: { varietalId: id },
-            });
-
-            if (wineCount > 0) {
-                throw new Error(`Cannot delete varietal: ${wineCount} wine(s) are linked to it`);
-            }
-
-            await prisma.varietal.delete({
-                where: { id },
-            });
-
-            return true;
-        },
-
-        // Wine Mutations
-        createWine: async (_: any, { input }: any) => {
-            const { tagIds, ...wineData } = input;
-
-            return await prisma.wine.create({
-                data: {
-                    ...wineData,
-                    tags: tagIds ? {
-                        connect: tagIds.map((id: string) => ({ id })),
-                    } : undefined,
-                },
-                include: {
-                    winery: true,
-                    varietal: true,
-                    tags: true,
-                    photos: true
-                },
-            });
-        },
-
-        updateWine: async (_: any, { id, input }: any) => {
-            const { tagIds, ...wineData } = input;
-
-            return await prisma.wine.update({
-                where: { id },
-                data: {
-                    ...wineData,
-                    tags: tagIds ? {
-                        set: tagIds.map((tagId: string) => ({ id: tagId })),
-                    } : undefined,
-                },
-                include: {
-                    winery: true,
-                    varietal: true,
-                    tags: true,
-                    photos: true
-                },
-            });
-        },
-
-        deleteWine: async (_: any, { id }: { id: string }) => {
-            // Get wine with photos to delete from S3
-            const wine = await prisma.wine.findUnique({
-                where: { id },
-                include: { photos: true },
-            });
-
-            // Delete photos from S3
-            if (wine?.photos) {
-                for (const photo of wine.photos) {
-                    if (photo.s3Key) {
-                        try {
-                            await s3Client.send(
-                                new DeleteObjectCommand({
-                                    Bucket: S3_BUCKET_NAME,
-                                    Key: photo.s3Key,
-                                })
-                            );
-                        } catch (error) {
-                            console.error('Failed to delete photo from S3:', error);
-                        }
-                    }
-                }
-            }
-
-            return await prisma.wine.delete({
-                where: { id },
-                include: {
-                    winery: true,
-                    varietal: true,
-                    tags: true,
-                    photos: true
-                },
-            });
-        },
-
-        updateWineQuantity: async (_: any, { id, quantity }: any) => {
-            return await prisma.wine.update({
-                where: { id },
-                data: { quantity },
-                include: {
-                    winery: true,
-                    varietal: true,
-                    tags: true,
-                    photos: true
-                },
-            });
-        },
-
-        // Winery Mutations
-        createWinery: async (_: any, { input }: any) => {
-            return await prisma.winery.create({
-                data: input,
-            });
-        },
-
-        updateWinery: async (_: any, { id, input }: any) => {
-            return await prisma.winery.update({
-                where: { id },
-                data: input,
-            });
-        },
-
-        deleteWinery: async (_: any, { id }: { id: string }) => {
-            // Check if winery has wines
-            const winery = await prisma.winery.findUnique({
-                where: { id },
-                include: { wines: true },
-            });
-
-            if (winery?.wines.length) {
-                throw new Error('Cannot delete winery with existing wines');
-            }
-
-            return await prisma.winery.delete({
-                where: { id },
-            });
-        },
-
-        // Tag Mutations
-        createTag: async (_: any, { name, color }: any) => {
-            return await prisma.tag.create({
-                data: { name, color },
-            });
-        },
-
-        deleteTag: async (_: any, { id }: { id: string }) => {
-            return await prisma.tag.delete({
-                where: { id },
-            });
-        },
-
-        // Photo Mutations
-        addPhotoToWine: async (_: any, { wineId, url, s3Key, type = 'LABEL', caption, isPrimary = false }: any) => {
-            // If setting as primary, unset other primary photos for this wine
-            if (isPrimary) {
-                await prisma.photo.updateMany({
-                    where: { wineId, isPrimary: true },
-                    data: { isPrimary: false },
-                });
-            }
-
-            return await prisma.photo.create({
-                data: {
-                    wineId,
-                    url,
-                    s3Key,
-                    type,
-                    caption,
-                    isPrimary,
-                },
-                include: { wine: true },
-            });
-        },
-
-        updatePhoto: async (_: any, { id, caption, type }: any) => {
-            const updateData: any = {};
-            if (caption !== undefined) updateData.caption = caption;
-            if (type !== undefined) updateData.type = type;
-
-            return await prisma.photo.update({
-                where: { id },
-                data: updateData,
-                include: { wine: true },
-            });
-        },
-
-        deletePhoto: async (_: any, { id }: { id: string }) => {
-            const photo = await prisma.photo.findUnique({
-                where: { id },
-            });
-
-            if (!photo) {
-                throw new Error('Photo not found');
-            }
-
-            // Delete from S3 if s3Key exists
-            if (photo.s3Key) {
-                try {
-                    await s3Client.send(
-                        new DeleteObjectCommand({
-                            Bucket: S3_BUCKET_NAME,
-                            Key: photo.s3Key,
-                        })
-                    );
-                } catch (error) {
-                    console.error('Failed to delete from S3:', error);
-                    // Continue with database deletion even if S3 delete fails
-                }
-            }
-
-            return await prisma.photo.delete({
-                where: { id },
-                include: { wine: true },
-            });
-        },
-
-        setPrimaryPhoto: async (_: any, { id }: { id: string }) => {
-            const photo = await prisma.photo.findUnique({
-                where: { id },
-            });
-
-            if (!photo) {
-                throw new Error('Photo not found');
-            }
-
-            // Unset other primary photos for this wine
-            await prisma.photo.updateMany({
-                where: {
-                    wineId: photo.wineId,
-                    isPrimary: true,
-                    id: { not: id },
-                },
-                data: { isPrimary: false },
-            });
-
-            // Set this photo as primary
-            return await prisma.photo.update({
-                where: { id },
-                data: { isPrimary: true },
-                include: { wine: true },
-            });
-        },
-
-        // Cellar Location Mutations
-        createCellarLocation: async (_: any, args: any) => {
-            return await prisma.cellarLocation.create({
-                data: args,
-            });
-        },
-
-        importWinesFromCSV: async (_: any, { csvData }: { csvData: string }) => {
-            // Will implement next
-            return [];
-        },
-    },
-
-    // Field Resolvers
-    Varietal: {
-        wines: async (parent: any) => {
-            return await prisma.wine.findMany({
-                where: { varietalId: parent.id },
-                include: {
-                    winery: true,
-                    varietal: true,
-                    photos: {
-                        where: { isPrimary: true },
-                        take: 1,
-                    },
-                },
-            });
-        },
-    },
-
-    Wine: {
-        varietal: async (parent: any) => {
-            if (!parent.varietalId) return null;
-
-            return await prisma.varietal.findUnique({
-                where: { id: parent.varietalId },
-            });
-        },
-    },
-
-    Photo: {
-        url: async (parent: any) => {
-            // If s3Key exists, generate a presigned URL
-            if (parent.s3Key) {
-                try {
-                    // Generate URL valid for 1 hour
-                    return await generatePresignedUrl(parent.s3Key, 3600);
-                } catch (error) {
-                    console.error('Failed to generate presigned URL:', error);
-                    // Fall back to original URL if generation fails
-                    return parent.url;
-                }
-            }
-            // Return original URL if no s3Key
-            return parent.url;
-        },
-    },
-};
 
 async function startServer() {
     const app = express();
