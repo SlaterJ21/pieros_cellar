@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "ts-node prisma/seed-varietals.ts && ts-node prisma/seed.ts",
-    "seed:prod": "ts-node prisma/seed-varietals.ts",
+    "seed:prod": "ts-node ./prisma/seed-varietals.ts",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
