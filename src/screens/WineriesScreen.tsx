@@ -3,36 +3,12 @@ import React, { useState } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { Searchbar, Card, Chip, ActivityIndicator, Text, FAB } from 'react-native-paper';
 import { useQuery } from '@apollo/client/react';
-import { gql } from '@apollo/client';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { RootStackParamList } from '@/navigation/AppNavigator';
 import { useNavigation } from '@react-navigation/native';
+import { GET_WINERIES } from '@/graphql/queries/wineries';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-// GraphQL query to get all wineries with wine counts
-// NOTE: If this query doesn't work, you may need to extract wineries from GET_WINES instead
-const GET_WINERIES = gql`
-    query GetWineries {
-        wineries {
-            id
-            name
-            region
-            country
-            website
-            wines {
-                id
-                quantity
-                currentValue
-                name
-            }
-        }
-    }
-`;
-
-// Alternative approach if GET_WINERIES doesn't work:
-// Use GET_WINES and extract wineries from the wine data
-// See the implementation guide for details
 
 interface Winery {
     id: string;
@@ -40,11 +16,11 @@ interface Winery {
     region?: string;
     country?: string;
     website?: string;
-    wines: Array<{
+    wines: {
         id: string;
         quantity: number;
         currentValue?: number;
-    }>;
+    }[];
 }
 
 const WineryCard = React.memo(({ winery, onPress }: { winery: Winery; onPress: () => void }) => {
@@ -54,15 +30,6 @@ const WineryCard = React.memo(({ winery, onPress }: { winery: Winery; onPress: (
     }, 0);
     const totalValue = winery.wines.reduce((sum, wine) => sum + (wine.currentValue || 0), 0);
     const wineCount = winery.wines.length;
-
-    // Debug logging
-    if (wineCount > 0 && totalBottles === 0) {
-        console.log('[WineryCard] DEBUG - Zero bottles detected:', {
-            winery: winery.name,
-            wineCount,
-            wines: winery.wines.map(w => ({ id: w.id, quantity: w.quantity, type: typeof w.quantity }))
-        });
-    }
 
     const locationParts = [];
     if (winery.region) locationParts.push(winery.region);

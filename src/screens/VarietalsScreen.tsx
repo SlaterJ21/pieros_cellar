@@ -1,33 +1,13 @@
-// src/screens/VarietalsScreen.tsx
 import React, { useState } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { Searchbar, Card, Chip, ActivityIndicator, Text, FAB } from 'react-native-paper';
 import { useQuery } from '@apollo/client/react';
-import { gql } from '@apollo/client';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { RootStackParamList } from '@/navigation/AppNavigator';
 import { useNavigation } from '@react-navigation/native';
+import { GET_VARIETALS } from '@/graphql/queries/varietals';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-const GET_VARIETALS = gql`
-    query GetVarietals {
-        varietals {
-            id
-            name
-            type
-            description
-            commonRegions
-            characteristics
-            aliases
-            wines {
-                id
-                quantity
-                currentValue
-            }
-        }
-    }
-`;
 
 interface Varietal {
     id: string;
@@ -37,11 +17,11 @@ interface Varietal {
     commonRegions?: string[];
     characteristics?: string[];
     aliases?: string[];
-    wines: Array<{
+    wines: {
         id: string;
         quantity: number;
         currentValue?: number;
-    }>;
+    }[];
 }
 
 const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; onPress: () => void }) => {
