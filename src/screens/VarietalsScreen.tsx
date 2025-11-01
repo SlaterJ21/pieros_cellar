@@ -25,7 +25,7 @@ interface Varietal {
 }
 
 const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; onPress: () => void }) => {
-    const wines = wines || [];
+    const wines = varietal.wines || [];
     const totalBottles = wines.reduce((sum, wine) => {
         const qty = Number(wine.quantity) || 0;
         return sum + qty;
@@ -141,16 +141,18 @@ export default function VarietalsScreen() {
 
     // Sort by number of wines (descending), then alphabetically
     const sortedVarietals = [...filteredVarietals].sort((a, b) => {
-        const wineCountDiff = b.wines.length - a.wines.length;
+        const aWineCount = a.wines?.length || 0;
+        const bWineCount = b.wines?.length || 0;
+        const wineCountDiff = bWineCount - aWineCount;
         if (wineCountDiff !== 0) return wineCountDiff;
         return a.name.localeCompare(b.name);
     });
 
     // Calculate stats from FILTERED varietals (updates with search)
     const totalVarietals = sortedVarietals.length;
-    const totalWines = sortedVarietals.reduce((sum, v) => sum + v.wines.length, 0);
+    const totalWines = sortedVarietals.reduce((sum, v) => sum + (v.wines?.length || 0), 0);
     const totalBottles = sortedVarietals.reduce((sum, v) =>
-        sum + v.wines.reduce((s, wine) => s + (Number(wine.quantity) || 0), 0), 0
+        sum + (v.wines || []).reduce((s, wine) => s + (Number(wine.quantity) || 0), 0), 0
     );
 
     // Count by type
