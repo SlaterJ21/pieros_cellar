@@ -1,4 +1,3 @@
-// src/screens/WineriesScreen.tsx
 import React, { useState } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { Searchbar, Card, Chip, ActivityIndicator, Text, FAB } from 'react-native-paper';

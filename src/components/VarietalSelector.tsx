@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, FlatList, Modal as RNModal, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, FlatList, Modal as RNModal, TouchableOpacity } from 'react-native';
 import {
     Searchbar,
     List,
@@ -13,8 +13,8 @@ import {
     HelperText
 } from 'react-native-paper';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { GET_VARIETALS } from '../graphql/queries/varietals';
-import { CREATE_VARIETAL } from '../graphql/mutations/varietals';
+import { GET_VARIETALS } from '@/graphql/queries/varietals';
+import { CREATE_VARIETAL } from '@/graphql/mutations/varietals';
 
 interface VarietalSelectorProps {
     visible: boolean;
@@ -40,7 +40,7 @@ export default function VarietalSelector({
         characteristics: '',
     });
 
-    const { data, loading, error, refetch } = useQuery(GET_VARIETALS, {
+    const { data, loading, error } = useQuery(GET_VARIETALS, {
         variables: {
             type: wineType,
             search: searchQuery || undefined,
@@ -204,7 +204,7 @@ export default function VarietalSelector({
                                                 left={(props) => (
                                                     <List.Icon
                                                         {...props}
-                                                        icon={item.id === selectedVarietalId ? 'check-circle' : 'leaf'}
+                                                        icon={item.id === selectedVarietalId ? 'check-circle' : 'fruits-grape'}
                                                         color={item.id === selectedVarietalId ? '#8B2E2E' : '#8B2E2E'}
                                                     />
                                                 )}

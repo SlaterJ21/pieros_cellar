@@ -199,7 +199,6 @@ const WineGridCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, 
         </TouchableOpacity>
     );
 }, (prevProps, nextProps) => {
-    // FIXED: Add photo comparison to detect changes
     const prevPhotos = prevProps.item.photos?.length || 0;
     const nextPhotos = nextProps.item.photos?.length || 0;
     const prevPrimaryPhoto = prevProps.item.photos?.find((p: any) => p.isPrimary)?.url ||
