@@ -1,0 +1,217 @@
+// prisma/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Winery {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  region        String?
+  country       String?
+  website       String?
+  description   String?     @db.Text
+
+  // Contact
+  email         String?
+  phone         String?
+
+  // Additional info
+  foundedYear   Int?
+  logo          String?     // URL to logo image
+
+  wines         Wine[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([name])
+  @@index([country])
+}
+
+model Varietal {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  
+  // Additional metadata
+  type          WineType?   // Typical wine type for this varietal
+  description   String?     @db.Text
+  
+  // Common regions (informational)
+  commonRegions String[]    // Array of common regions
+  
+  // Characteristics
+  characteristics String[]  // e.g., ["Full-bodied", "High tannins", "Dark fruit"]
+  
+  // Aliases and alternate names
+  aliases       String[]    // e.g., ["Shiraz"] for Syrah
+  
+  wines         Wine[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([name])
+  @@index([type])
+}
+
+model Wine {
+  id            String      @id @default(uuid())
+
+  // Basic Info
+  name          String
+  winery        Winery      @relation(fields: [wineryId], references: [id])
+  wineryId      String
+  vintage       Int?
+  
+  // Changed from String? to relation
+  varietal      Varietal?   @relation(fields: [varietalId], references: [id])
+  varietalId    String?
+  
+  region        String?
+  subRegion     String?
+  country       String?
+  appellation   String?
+
+  // Classification
+  type          WineType    @default(RED)
+  sweetness     Sweetness?
+
+  // Inventory
+  quantity      Int         @default(1)
+  bottleSize    BottleSize  @default(STANDARD)
+
+  // Purchase Info
+  purchaseDate  DateTime?
+  purchasePrice Decimal?    @db.Decimal(10, 2)
+  purchaseLocation String?
+  retailer      String?
+
+  // Storage
+  location      String?
+  binNumber     String?
+  rackNumber    String?
+  cellarZone    String?
+
+  // Drinking Window
+  drinkFrom     Int?
+  drinkTo       Int?
+  peakDrinking  Int?
+
+  // Ratings & Notes
+  personalRating Int?
+  criticsRating  Int?
+  criticName     String?
+
+  personalNotes String?     @db.Text
+  tastingNotes  String?     @db.Text
+
+  // Value Tracking
+  currentValue  Decimal?    @db.Decimal(10, 2)
+  estimatedValue Decimal?   @db.Decimal(10, 2)
+
+  // Organization
+  tags          Tag[]
+  photos        Photo[]
+
+  // Status
+  status        WineStatus  @default(IN_CELLAR)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([wineryId])
+  @@index([varietalId])
+  @@index([type])
+  @@index([country])
+  @@index([region])
+  @@index([vintage])
+  @@index([status])
+}
+
+model Tag {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  color         String?
+  wines         Wine[]
+
+  createdAt     DateTime    @default(now())
+}
+
+model Photo {
+  id            String      @id @default(uuid())
+  wine          Wine        @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  wineId        String
+
+  url           String
+  s3Key         String?
+  type          PhotoType   @default(LABEL)
+  caption       String?
+  isPrimary     Boolean     @default(false)
+
+  createdAt     DateTime    @default(now())
+
+  @@index([wineId, isPrimary])
+}
+
+model CellarLocation {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  description   String?
+  capacity      Int?
+  temperature   String?
+  humidity      String?
+
+  createdAt     DateTime    @default(now())
+}
+
+enum WineType {
+  RED
+  WHITE
+  ROSE
+  SPARKLING
+  DESSERT
+  FORTIFIED
+  ORANGE
+}
+
+enum Sweetness {
+  BONE_DRY
+  DRY
+  OFF_DRY
+  MEDIUM_SWEET
+  SWEET
+  VERY_SWEET
+}
+
+enum BottleSize {
+  HALF
+  STANDARD
+  MAGNUM
+  DOUBLE_MAGNUM
+  JEROBOAM
+  IMPERIAL
+}
+
+enum WineStatus {
+  IN_CELLAR
+  READY_TO_DRINK
+  PAST_PEAK
+  RESERVED
+  CONSUMED
+  GIFTED
+  SOLD
+}
+
+enum PhotoType {
+  LABEL
+  BOTTLE
+  CORK
+  POUR
+  OTHER
+}
