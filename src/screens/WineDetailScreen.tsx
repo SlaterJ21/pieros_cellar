@@ -262,7 +262,7 @@ export default function WineDetailScreen({ navigation, route }: Props) {
                                 {wine.type}
                             </Chip>
                             {wine.varietal?.name && (
-                                <Chip icon="leaf" style={styles.chip}>{wine.varietal.name}</Chip>
+                                <Chip icon="fruit-grapes" style={styles.chip}>{wine.varietal.name}</Chip>
                             )}
                         </View>
 

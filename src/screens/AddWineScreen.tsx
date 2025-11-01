@@ -553,36 +553,33 @@ export default function AddWineScreen({ navigation, route }: Props) {
                                 activeOpacity={1}
                                 onPress={() => setShowDatePicker(false)}
                             />
-                            <View style={styles.pickerBottomContainer}>
-                                <Surface style={styles.pickerContent} elevation={5}>
-                                    <View style={styles.pickerHeader}>
-                                        <Text style={styles.pickerTitle}>Select Purchase Date</Text>
-                                        <IconButton icon="close" size={24} onPress={() => setShowDatePicker(false)} />
-                                    </View>
-                                    <View style={styles.datePickerContainer}>
-                                        <DateTimePicker
-                                            value={formData.purchaseDate}
-                                            mode="date"
-                                            display="spinner"
-                                            onChange={(event, selectedDate) => {
-                                                if (selectedDate) {
-                                                    updateField('purchaseDate', selectedDate);
-                                                }
-                                            }}
-                                            style={styles.datePicker}
-                                        />
-                                    </View>
-                                    <View style={styles.datePickerActions}>
-                                        <Button
-                                            mode="contained"
-                                            onPress={() => setShowDatePicker(false)}
-                                            style={styles.datePickerButton}
-                                            buttonColor="#8B2E2E"
-                                        >
-                                            Done
-                                        </Button>
-                                    </View>
-                                </Surface>
+                            <View style={styles.datePickerModalContainer}>
+                                <View style={styles.datePickerHeader}>
+                                    <Button onPress={() => setShowDatePicker(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Text style={styles.datePickerTitle}>Select Date</Text>
+                                    <Button
+                                        onPress={() => setShowDatePicker(false)}
+                                        textColor="#8B2E2E"
+                                    >
+                                        Done
+                                    </Button>
+                                </View>
+                                <View style={styles.datePickerWrapper}>
+                                    <DateTimePicker
+                                        value={formData.purchaseDate}
+                                        mode="date"
+                                        display="spinner"
+                                        onChange={(event, selectedDate) => {
+                                            if (selectedDate) {
+                                                updateField('purchaseDate', selectedDate);
+                                            }
+                                        }}
+                                        style={styles.iosDatePicker}
+                                        textColor="#000000"
+                                    />
+                                </View>
                             </View>
                         </View>
                     </RNModal>
@@ -1093,19 +1090,34 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#8B2E2E',
     },
-    datePickerContainer: {
+    datePickerModalContainer: {
         backgroundColor: '#fff',
-        paddingVertical: 20,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     },
-    datePicker: {
-        width: '100%',
+    datePickerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
     },
-    datePickerActions: {
-        padding: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
+    datePickerTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#000',
     },
-    datePickerButton: {
-        width: '100%',
+    datePickerWrapper: {
+        backgroundColor: '#fff',
+        paddingVertical: 8,
+        minHeight: 216, // Important: iOS picker needs minimum height
+    },
+    iosDatePicker: {
+        height: 216, // Fixed height for iOS picker
+        backgroundColor: '#fff',
     },
 });
