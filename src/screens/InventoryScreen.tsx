@@ -315,7 +315,6 @@ export default function InventoryScreen() {
                         style={styles.settingsButton}
                     />
                 </View>
-                <DebugInfo />
 
                 <View style={styles.controlsRow}>
                     {processedWines.length > 0 && (
