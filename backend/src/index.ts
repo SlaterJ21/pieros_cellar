@@ -972,8 +972,8 @@ async function startServer() {
     const PORT = parseInt(process.env.PORT || '4000', 10);
 
     app.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Server ready at http://localhost:${PORT}${server.graphqlPath}`);
-        console.log(`📤 Upload endpoint: http://localhost:${PORT}/api/upload-photo`);
+        console.log(`🚀 Server ready at http://0.0.0.0:${PORT}${server.graphqlPath}`);
+        console.log(`📤 Upload endpoint: http://0.0.0.0:${PORT}/api/upload-photo`);
         console.log(`📊 Database connected: ${prisma ? '✅' : '❌'}`);
         console.log(`🪣 S3 Bucket: ${S3_BUCKET_NAME || '❌ Not configured'}`);
     });
