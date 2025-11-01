@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.wineInventory.wineinventoryapp",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "The app needs access to your photos to upload wine labels.",
-        "NSCameraUsageDescription": "The app needs access to your camera to take photos of wine labels."
+        "NSCameraUsageDescription": "The app needs access to your camera to take photos of wine labels.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,10 +27,16 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.wineInventory.wineinventoryapp"
     },
     "web": {
       "output": "static",
@@ -61,6 +68,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b4f2df96-0b5f-4582-a308-75030a80b5bd"
+      }
+    },
+    "owner": "jslaterdev"
   }
 }
