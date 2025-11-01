@@ -7,7 +7,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/navigation/AppNavigator';
 import { useNavigation } from '@react-navigation/native';
 import { useDebounce } from '@/hooks/useDebounce';
-import DebugInfo from '@/components/DebugInfo';
 import {
     useShowEmptyBottles,
     useSortPreference,

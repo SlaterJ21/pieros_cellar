@@ -17,7 +17,7 @@ const getGraphQLUri = () => {
         }
         return 'http://localhost:4000/graphql';
     }
-    return 'https://your-production-url.com/graphql';
+    return `${process.env.EXPO_PUBLIC_API_URL}/graphql`;
 };
 
 const client = new ApolloClient({
