@@ -25,12 +25,13 @@ interface Varietal {
 }
 
 const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; onPress: () => void }) => {
-    const totalBottles = varietal.wines.reduce((sum, wine) => {
+    const wines = wines || [];
+    const totalBottles = wines.reduce((sum, wine) => {
         const qty = Number(wine.quantity) || 0;
         return sum + qty;
     }, 0);
-    const totalValue = varietal.wines.reduce((sum, wine) => sum + (wine.currentValue || 0), 0);
-    const wineCount = varietal.wines.length;
+    const totalValue = wines.reduce((sum, wine) => sum + (wine.currentValue || 0), 0);
+    const wineCount = wines.length;
 
     // Get type color
     const getTypeColor = (type: string) => {
