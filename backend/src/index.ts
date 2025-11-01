@@ -367,7 +367,7 @@ const resolvers = {
 
             return await prisma.varietal.findMany({
                 where: {
-                    ...(type && { type }),
+                    ...(type && { type: type as any }),
                     ...(search && {
                         OR: [
                             { name: { contains: search, mode: 'insensitive' } },
@@ -969,7 +969,7 @@ async function startServer() {
 
     await server.start();
     server.applyMiddleware({
-        app,
+        app: app as any,
         cors: false,
         path: '/graphql',
     });
