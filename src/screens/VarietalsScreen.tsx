@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { Searchbar, Card, Chip, ActivityIndicator, Text, FAB } from 'react-native-paper';
 import { useQuery } from '@apollo/client/react';
@@ -24,7 +24,6 @@ interface Varietal {
     }[];
 }
 
-// Move these functions outside component to prevent recreation on each render
 const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
         RED: '#8B2E2E',
@@ -53,10 +52,16 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
     const totalValue = wines.reduce((sum, wine) => sum + (wine.currentValue || 0), 0);
     const wineCount = wines.length;
 
-    // Compute colors once before render
-    const typeColor = getTypeColor(varietal.type);
-    const typeTextColor = getTypeTextColor(varietal.type);
-    const chipBgColor = typeColor + '20';
+    // Memoize chip style to prevent recreation
+    const chipStyle = useMemo(() => ({
+        backgroundColor: getTypeColor(varietal.type) + '20',
+    }), [varietal.type]);
+
+    // Memoize text style to prevent recreation
+    const chipTextStyle = useMemo(() => [
+        styles.typeChipText,
+        { color: getTypeTextColor(varietal.type) }
+    ], [varietal.type]);
 
     return (
         <TouchableOpacity onPress={onPress}>
@@ -67,8 +72,8 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
                         <Chip
                             mode="flat"
                             compact
-                            style={{ backgroundColor: chipBgColor }}
-                            textStyle={[styles.typeChipText, { color: typeTextColor }]}
+                            style={chipStyle}
+                            textStyle={chipTextStyle}
                         >
                             {varietal.type}
                         </Chip>
@@ -143,34 +148,47 @@ export default function VarietalsScreen() {
     const varietals: Varietal[] = data?.varietals || [];
 
     // Filter varietals by search query
-    const filteredVarietals = varietals.filter(varietal =>
-        varietal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        varietal.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        varietal.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        varietal.aliases?.some(alias => alias.toLowerCase().includes(searchQuery.toLowerCase()))
+    const filteredVarietals = useMemo(() =>
+            varietals.filter(varietal =>
+                varietal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                varietal.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                varietal.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                varietal.aliases?.some(alias => alias.toLowerCase().includes(searchQuery.toLowerCase()))
+            ),
+        [varietals, searchQuery]
     );
 
     // Sort by number of wines (descending), then alphabetically
-    const sortedVarietals = [...filteredVarietals].sort((a, b) => {
-        const aWineCount = a.wines?.length || 0;
-        const bWineCount = b.wines?.length || 0;
-        const wineCountDiff = bWineCount - aWineCount;
-        if (wineCountDiff !== 0) return wineCountDiff;
-        return a.name.localeCompare(b.name);
-    });
-
-    // Calculate stats from FILTERED varietals (updates with search)
-    const totalVarietals = sortedVarietals.length;
-    const totalWines = sortedVarietals.reduce((sum, v) => sum + (v.wines?.length || 0), 0);
-    const totalBottles = sortedVarietals.reduce((sum, v) =>
-        sum + (v.wines || []).reduce((s, wine) => s + (Number(wine.quantity) || 0), 0), 0
+    const sortedVarietals = useMemo(() =>
+            [...filteredVarietals].sort((a, b) => {
+                const aWineCount = a.wines?.length || 0;
+                const bWineCount = b.wines?.length || 0;
+                const wineCountDiff = bWineCount - aWineCount;
+                if (wineCountDiff !== 0) return wineCountDiff;
+                return a.name.localeCompare(b.name);
+            }),
+        [filteredVarietals]
     );
 
+    // Calculate stats from FILTERED varietals (updates with search)
+    const stats = useMemo(() => {
+        const totalVarietals = sortedVarietals.length;
+        const totalWines = sortedVarietals.reduce((sum, v) => sum + (v.wines?.length || 0), 0);
+        const totalBottles = sortedVarietals.reduce((sum, v) =>
+            sum + (v.wines || []).reduce((s, wine) => s + (Number(wine.quantity) || 0), 0), 0
+        );
+
+        return { totalVarietals, totalWines, totalBottles };
+    }, [sortedVarietals]);
+
     // Count by type
-    const byType = sortedVarietals.reduce((acc, v) => {
-        acc[v.type] = (acc[v.type] || 0) + 1;
-        return acc;
-    }, {} as { [key: string]: number });
+    const byType = useMemo(() =>
+            sortedVarietals.reduce((acc, v) => {
+                acc[v.type] = (acc[v.type] || 0) + 1;
+                return acc;
+            }, {} as { [key: string]: number }),
+        [sortedVarietals]
+    );
 
     const renderVarietalItem = ({ item }: { item: Varietal }) => (
         <VarietalCard
@@ -194,15 +212,15 @@ export default function VarietalsScreen() {
                 {sortedVarietals.length > 0 && (
                     <View style={styles.statsBar}>
                         <Text style={styles.statsText}>
-                            {totalVarietals.toLocaleString(undefined, { maximumFractionDigits: 0 })} {totalVarietals === 1 ? 'varietal' : 'varietals'}
+                            {stats.totalVarietals.toLocaleString(undefined, { maximumFractionDigits: 0 })} {stats.totalVarietals === 1 ? 'varietal' : 'varietals'}
                         </Text>
                         <Text style={styles.statsSeparator}>•</Text>
                         <Text style={styles.statsText}>
-                            {totalWines.toLocaleString(undefined, { maximumFractionDigits: 0 })} wines
+                            {stats.totalWines.toLocaleString(undefined, { maximumFractionDigits: 0 })} wines
                         </Text>
                         <Text style={styles.statsSeparator}>•</Text>
                         <Text style={styles.statsText}>
-                            {totalBottles.toLocaleString(undefined, { maximumFractionDigits: 0 })} bottles
+                            {stats.totalBottles.toLocaleString(undefined, { maximumFractionDigits: 0 })} bottles
                         </Text>
                     </View>
                 )}
@@ -256,6 +274,9 @@ export default function VarietalsScreen() {
                     }
                     onRefresh={refetch}
                     refreshing={false}
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
                 />
             )}
 

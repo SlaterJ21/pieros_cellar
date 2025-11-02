@@ -1,5 +1,4 @@
-// src/screens/AddVarietalScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     ScrollView,
@@ -25,6 +24,7 @@ import { GET_VARIETAL } from '@/graphql/queries/varietals';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type AddVarietalRouteProp = RouteProp<RootStackParamList, 'EditVarietal'>;
+
 const wineTypes = [
     { value: 'RED', label: 'Red' },
     { value: 'WHITE', label: 'White' },
@@ -34,6 +34,7 @@ const wineTypes = [
     { value: 'FORTIFIED', label: 'Fortified' },
     { value: 'ORANGE', label: 'Orange' },
 ];
+
 export default function AddVarietalScreen() {
     const navigation = useNavigation<NavigationProp>();
     const route = useRoute<AddVarietalRouteProp>();
@@ -49,22 +50,27 @@ export default function AddVarietalScreen() {
     const [regionInput, setRegionInput] = useState('');
     const [characteristicInput, setCharacteristicInput] = useState('');
     const [aliasInput, setAliasInput] = useState('');
+    const [showWineTypeModal, setShowWineTypeModal] = useState(false);
 
-    const { data, loading: loadingVarietal } = useQuery(GET_VARIETAL, {
+    const { data, loading: loadingVarietal, error } = useQuery(GET_VARIETAL, {
         variables: { id: varietalId },
         skip: !isEditing,
-        onCompleted: (data) => {
-            if (data?.varietal) {
-                const v = data.varietal;
-                setName(v.name || '');
-                setType(v.type || 'RED');
-                setDescription(v.description || '');
-                setCommonRegions(v.commonRegions || []);
-                setCharacteristics(v.characteristics || []);
-                setAliases(v.aliases || []);
-            }
-        },
+        fetchPolicy: 'cache-and-network',
     });
+
+    // Use useEffect to populate form when data loads
+    useEffect(() => {
+        if (data?.varietal && isEditing) {
+            const v = data.varietal;
+
+            setName(v.name || '');
+            setType(v.type || 'RED');
+            setDescription(v.description || '');
+            setCommonRegions(v.commonRegions || []);
+            setCharacteristics(v.characteristics || []);
+            setAliases(v.aliases || []);
+        }
+    }, [data, isEditing]);
 
     const [createVarietal, { loading: creating }] = useMutation(CREATE_VARIETAL, {
         refetchQueries: ['GetVarietals'],
@@ -107,8 +113,6 @@ export default function AddVarietalScreen() {
         setAliases(aliases.filter((_, i) => i !== index));
     };
 
-    const [showWineTypeModal, setShowWineTypeModal] = useState(false);
-
     const handleSubmit = async () => {
         if (!name.trim()) {
             Alert.alert('Error', 'Please enter a varietal name');
@@ -119,9 +123,9 @@ export default function AddVarietalScreen() {
             name: name.trim(),
             type,
             description: description.trim() || null,
-            commonRegions: commonRegions.length > 0 ? commonRegions : null,
-            characteristics: characteristics.length > 0 ? characteristics : null,
-            aliases: aliases.length > 0 ? aliases : null,
+            commonRegions: commonRegions.length > 0 ? commonRegions : [],
+            characteristics: characteristics.length > 0 ? characteristics : [],
+            aliases: aliases.length > 0 ? aliases : [],
         };
 
         try {
@@ -129,15 +133,19 @@ export default function AddVarietalScreen() {
                 await updateVarietal({
                     variables: { id: varietalId, input },
                 });
-                Alert.alert('Success', 'Varietal updated successfully');
+                Alert.alert('Success', 'Varietal updated successfully', [
+                    { text: 'OK', onPress: () => navigation.goBack() }
+                ]);
             } else {
                 await createVarietal({
                     variables: { input },
                 });
-                Alert.alert('Success', 'Varietal created successfully');
+                Alert.alert('Success', 'Varietal created successfully', [
+                    { text: 'OK', onPress: () => navigation.goBack() }
+                ]);
             }
-            navigation.goBack();
         } catch (error: any) {
+            console.error('Error saving varietal:', error);
             Alert.alert('Error', error.message || 'Failed to save varietal');
         }
     };
@@ -151,12 +159,33 @@ export default function AddVarietalScreen() {
         );
     }
 
+    if (error) {
+        return (
+            <View style={styles.centered}>
+                <Text style={styles.errorIcon}>⚠️</Text>
+                <Text style={styles.error}>Error loading varietal</Text>
+                <Text style={styles.errorDetail}>{error.message}</Text>
+                <Button
+                    mode="contained"
+                    onPress={() => navigation.goBack()}
+                    style={styles.backButton}
+                >
+                    Go Back
+                </Button>
+            </View>
+        );
+    }
+
     return (
         <KeyboardAvoidingView
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.content}
+                keyboardShouldPersistTaps="handled"
+            >
                 {/* Name */}
                 <TextInput
                     label="Varietal Name *"
@@ -180,17 +209,6 @@ export default function AddVarietalScreen() {
                     </Button>
                 </View>
 
-
-                {/* Wine Type Picker */}
-                <PickerModal
-                    visible={showWineTypeModal}
-                    onDismiss={() => setShowWineTypeModal(false)}
-                    onSelect={setType}
-                    options={wineTypes}
-                    title="Select Wine Type"
-                    selectedValue={type}
-                />
-
                 {/* Description */}
                 <TextInput
                     label="Description"
@@ -213,6 +231,7 @@ export default function AddVarietalScreen() {
                         style={styles.chipInput}
                         placeholder="e.g., Bordeaux"
                         onSubmitEditing={handleAddRegion}
+                        returnKeyType="done"
                     />
                     <Button mode="contained" onPress={handleAddRegion} style={styles.addButton}>
                         Add
@@ -240,6 +259,7 @@ export default function AddVarietalScreen() {
                         style={styles.chipInput}
                         placeholder="e.g., Full-bodied"
                         onSubmitEditing={handleAddCharacteristic}
+                        returnKeyType="done"
                     />
                     <Button mode="contained" onPress={handleAddCharacteristic} style={styles.addButton}>
                         Add
@@ -267,6 +287,7 @@ export default function AddVarietalScreen() {
                         style={styles.chipInput}
                         placeholder="e.g., Shiraz"
                         onSubmitEditing={handleAddAlias}
+                        returnKeyType="done"
                     />
                     <Button mode="contained" onPress={handleAddAlias} style={styles.addButton}>
                         Add
@@ -290,11 +311,22 @@ export default function AddVarietalScreen() {
                     onPress={handleSubmit}
                     style={styles.submitButton}
                     loading={creating || updating}
-                    disabled={creating || updating}
+                    disabled={creating || updating || !name.trim()}
+                    icon="check"
                 >
                     {isEditing ? 'Update Varietal' : 'Create Varietal'}
                 </Button>
             </ScrollView>
+
+            {/* Wine Type Picker */}
+            <PickerModal
+                visible={showWineTypeModal}
+                onDismiss={() => setShowWineTypeModal(false)}
+                onSelect={setType}
+                options={wineTypes}
+                title="Select Wine Type"
+                selectedValue={type}
+            />
         </KeyboardAvoidingView>
     );
 }
@@ -309,6 +341,7 @@ const styles = StyleSheet.create({
     },
     content: {
         padding: 16,
+        paddingBottom: 32,
     },
     centered: {
         flex: 1,
@@ -321,6 +354,27 @@ const styles = StyleSheet.create({
         color: '#666',
         fontSize: 16,
     },
+    errorIcon: {
+        fontSize: 48,
+        marginBottom: 16,
+    },
+    error: {
+        color: '#d32f2f',
+        fontSize: 18,
+        textAlign: 'center',
+        marginBottom: 8,
+        fontWeight: '600',
+    },
+    errorDetail: {
+        color: '#666',
+        fontSize: 14,
+        textAlign: 'center',
+        paddingHorizontal: 20,
+        marginBottom: 16,
+    },
+    backButton: {
+        backgroundColor: '#8B2E2E',
+    },
     label: {
         fontSize: 16,
         fontWeight: '600',
@@ -332,8 +386,12 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         backgroundColor: '#fff',
     },
-    segmentedButtons: {
+    field: {
         marginBottom: 16,
+    },
+    menuButton: {
+        justifyContent: 'flex-start',
+        backgroundColor: '#fff',
     },
     chipInputRow: {
         flexDirection: 'row',
@@ -357,18 +415,12 @@ const styles = StyleSheet.create({
     chip: {
         marginHorizontal: 4,
         marginVertical: 4,
+        backgroundColor: '#E8F5E9',
     },
     submitButton: {
         marginTop: 24,
         marginBottom: 32,
         backgroundColor: '#8B2E2E',
         paddingVertical: 8,
-    },
-    field: {
-        marginBottom: 16,
-    },
-    menuButton: {
-        justifyContent: 'flex-start',
-        backgroundColor: '#fff',
     },
 });
