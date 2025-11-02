@@ -13,18 +13,18 @@ interface Varietal {
     id: string;
     name: string;
     type: string;
-    description?: string;
-    commonRegions?: string[];
-    characteristics?: string[];
-    aliases?: string[];
-    wines: {
+    description?: string | null;
+    commonRegions?: (string | null)[] | null;
+    characteristics?: (string | null)[] | null;
+    aliases?: (string | null)[] | null;
+    wines: Array<{
         id: string;
         quantity: number;
-        currentValue?: number;
-    }[];
+        currentValue?: number | null;
+    }>;
 }
 
-const getTypeColor = (type: string) => {
+const getTypeColor = (type: string): string => {
     const colors: { [key: string]: string } = {
         RED: '#8B2E2E',
         WHITE: '#FFD700',
@@ -37,43 +37,70 @@ const getTypeColor = (type: string) => {
     return colors[type] || '#666';
 };
 
-const getTypeTextColor = (type: string) => {
-    // Use dark text for light backgrounds
+const getTypeTextColor = (type: string): string => {
     const darkTextTypes = ['WHITE', 'ROSE', 'ORANGE', 'DESSERT', 'SPARKLING'];
     return darkTextTypes.includes(type) ? '#2c2c2c' : getTypeColor(type);
 };
 
+// Safe number formatter
+const formatNumber = (num: number): string => {
+    try {
+        return num.toLocaleString('en-US');
+    } catch (e) {
+        return String(Math.floor(num));
+    }
+};
+
 const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; onPress: () => void }) => {
-    const wines = varietal.wines || [];
+    // Safely process wines with defensive checks
+    const wines = Array.isArray(varietal.wines) ? varietal.wines : [];
+
     const totalBottles = wines.reduce((sum, wine) => {
-        const qty = Number(wine.quantity) || 0;
-        return sum + qty;
+        if (!wine) return sum;
+        const qty = Number(wine.quantity);
+        return sum + (isNaN(qty) ? 0 : qty);
     }, 0);
-    const totalValue = wines.reduce((sum, wine) => sum + (wine.currentValue || 0), 0);
+
+    const totalValue = wines.reduce((sum, wine) => {
+        if (!wine) return sum;
+        const value = Number(wine.currentValue);
+        return sum + (isNaN(value) ? 0 : value);
+    }, 0);
+
     const wineCount = wines.length;
 
-    // Memoize chip style to prevent recreation
-    const chipStyle = useMemo(() => ({
-        backgroundColor: getTypeColor(varietal.type) + '20',
-    }), [varietal.type]);
+    // Safely filter null values from arrays
+    const safeCharacteristics = Array.isArray(varietal.characteristics)
+        ? varietal.characteristics.filter((c): c is string => typeof c === 'string' && c.length > 0)
+        : [];
 
-    // Memoize text style to prevent recreation
-    const chipTextStyle = useMemo(() => [
-        styles.typeChipText,
-        { color: getTypeTextColor(varietal.type) }
-    ], [varietal.type]);
+    const safeRegions = Array.isArray(varietal.commonRegions)
+        ? varietal.commonRegions.filter((r): r is string => typeof r === 'string' && r.length > 0)
+        : [];
+
+    const safeAliases = Array.isArray(varietal.aliases)
+        ? varietal.aliases.filter((a): a is string => typeof a === 'string' && a.length > 0)
+        : [];
 
     return (
-        <TouchableOpacity onPress={onPress}>
+        <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
             <Card style={styles.card}>
                 <Card.Content>
                     <View style={styles.headerRow}>
-                        <Text variant="titleLarge" style={styles.varietalName}>{varietal.name}</Text>
+                        <Text variant="titleLarge" style={styles.varietalName}>
+                            {varietal.name || 'Unknown'}
+                        </Text>
                         <Chip
                             mode="flat"
                             compact
-                            style={chipStyle}
-                            textStyle={chipTextStyle}
+                            style={[
+                                styles.typeChip,
+                                { backgroundColor: getTypeColor(varietal.type) + '20' }
+                            ]}
+                            textStyle={[
+                                styles.typeChipText,
+                                { color: getTypeTextColor(varietal.type) }
+                            ]}
                         >
                             {varietal.type}
                         </Chip>
@@ -85,11 +112,11 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
                         </Text>
                     )}
 
-                    {varietal.characteristics && varietal.characteristics.length > 0 && (
+                    {safeCharacteristics.length > 0 && (
                         <View style={styles.characteristicsRow}>
-                            {varietal.characteristics.slice(0, 3).map((char, index) => (
+                            {safeCharacteristics.slice(0, 3).map((char, index) => (
                                 <Chip
-                                    key={index}
+                                    key={`char-${index}-${char}`}
                                     mode="outlined"
                                     compact
                                     style={styles.characteristicChip}
@@ -98,17 +125,17 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
                                     {char}
                                 </Chip>
                             ))}
-                            {varietal.characteristics.length > 3 && (
+                            {safeCharacteristics.length > 3 && (
                                 <Text style={styles.moreText}>
-                                    +{varietal.characteristics.length - 3} more
+                                    +{safeCharacteristics.length - 3} more
                                 </Text>
                             )}
                         </View>
                     )}
 
-                    {varietal.commonRegions && varietal.commonRegions.length > 0 && (
+                    {safeRegions.length > 0 && (
                         <Text variant="bodyMedium" style={styles.regions} numberOfLines={1}>
-                            📍 {varietal.commonRegions.slice(0, 3).join(', ')}
+                            📍 {safeRegions.slice(0, 3).join(', ')}
                         </Text>
                     )}
 
@@ -117,18 +144,18 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
                             {wineCount} {wineCount === 1 ? 'wine' : 'wines'}
                         </Chip>
                         <Chip mode="outlined" compact style={styles.chip} icon="numeric">
-                            {totalBottles} bottles
+                            {formatNumber(totalBottles)} bottles
                         </Chip>
                         {totalValue > 0 && (
                             <Chip mode="outlined" compact style={styles.chipValue} icon="currency-usd">
-                                ${totalValue.toFixed(0)}
+                                ${formatNumber(Math.floor(totalValue))}
                             </Chip>
                         )}
                     </View>
 
-                    {varietal.aliases && varietal.aliases.length > 0 && (
+                    {safeAliases.length > 0 && (
                         <Text variant="bodyMedium" style={styles.aliases} numberOfLines={1}>
-                            Also known as: {varietal.aliases.join(', ')}
+                            Also known as: {safeAliases.join(', ')}
                         </Text>
                     )}
                 </Card.Content>
@@ -142,62 +169,123 @@ export default function VarietalsScreen() {
     const [searchQuery, setSearchQuery] = useState('');
 
     const { data, loading, error, refetch } = useQuery(GET_VARIETALS, {
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'network-only', // Changed from cache-and-network
+        notifyOnNetworkStatusChange: true,
     });
 
-    const varietals: Varietal[] = data?.varietals || [];
+    // Safely extract varietals with defensive check
+    const varietals: Varietal[] = useMemo(() => {
+        if (!data?.varietals || !Array.isArray(data.varietals)) return [];
+        return data.varietals.filter((v: any) => v && v.id && v.name);
+    }, [data]);
 
-    // Filter varietals by search query
-    const filteredVarietals = useMemo(() =>
-            varietals.filter(varietal =>
-                varietal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                varietal.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                varietal.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                varietal.aliases?.some(alias => alias.toLowerCase().includes(searchQuery.toLowerCase()))
-            ),
-        [varietals, searchQuery]
-    );
+    // Filter varietals with safe string operations
+    const filteredVarietals = useMemo(() => {
+        const query = (searchQuery || '').toLowerCase().trim();
+        if (!query) return varietals;
 
-    // Sort by number of wines (descending), then alphabetically
-    const sortedVarietals = useMemo(() =>
-            [...filteredVarietals].sort((a, b) => {
-                const aWineCount = a.wines?.length || 0;
-                const bWineCount = b.wines?.length || 0;
-                const wineCountDiff = bWineCount - aWineCount;
-                if (wineCountDiff !== 0) return wineCountDiff;
-                return a.name.localeCompare(b.name);
-            }),
-        [filteredVarietals]
-    );
+        return varietals.filter(varietal => {
+            try {
+                const name = (varietal.name || '').toLowerCase();
+                const type = (varietal.type || '').toLowerCase();
+                const desc = (varietal.description || '').toLowerCase();
 
-    // Calculate stats from FILTERED varietals (updates with search)
+                if (name.includes(query) || type.includes(query) || desc.includes(query)) {
+                    return true;
+                }
+
+                // Safe alias checking
+                if (Array.isArray(varietal.aliases)) {
+                    return varietal.aliases.some(alias =>
+                        alias && typeof alias === 'string' && alias.toLowerCase().includes(query)
+                    );
+                }
+
+                return false;
+            } catch (e) {
+                console.error('Filter error:', e);
+                return false;
+            }
+        });
+    }, [varietals, searchQuery]);
+
+    // Sort with safe operations
+    const sortedVarietals = useMemo(() => {
+        try {
+            return [...filteredVarietals].sort((a, b) => {
+                const aCount = Array.isArray(a.wines) ? a.wines.length : 0;
+                const bCount = Array.isArray(b.wines) ? b.wines.length : 0;
+                const diff = bCount - aCount;
+                if (diff !== 0) return diff;
+
+                const aName = a.name || '';
+                const bName = b.name || '';
+                return aName.localeCompare(bName, 'en-US');
+            });
+        } catch (e) {
+            console.error('Sort error:', e);
+            return filteredVarietals;
+        }
+    }, [filteredVarietals]);
+
+    // Calculate stats safely
     const stats = useMemo(() => {
-        const totalVarietals = sortedVarietals.length;
-        const totalWines = sortedVarietals.reduce((sum, v) => sum + (v.wines?.length || 0), 0);
-        const totalBottles = sortedVarietals.reduce((sum, v) =>
-            sum + (v.wines || []).reduce((s, wine) => s + (Number(wine.quantity) || 0), 0), 0
-        );
+        try {
+            const totalVarietals = sortedVarietals.length;
 
-        return { totalVarietals, totalWines, totalBottles };
+            let totalWines = 0;
+            let totalBottles = 0;
+
+            for (const v of sortedVarietals) {
+                if (Array.isArray(v.wines)) {
+                    totalWines += v.wines.length;
+                    for (const wine of v.wines) {
+                        if (wine) {
+                            const qty = Number(wine.quantity);
+                            if (!isNaN(qty)) {
+                                totalBottles += qty;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return { totalVarietals, totalWines, totalBottles };
+        } catch (e) {
+            console.error('Stats error:', e);
+            return { totalVarietals: 0, totalWines: 0, totalBottles: 0 };
+        }
     }, [sortedVarietals]);
 
-    // Count by type
-    const byType = useMemo(() =>
-            sortedVarietals.reduce((acc, v) => {
-                acc[v.type] = (acc[v.type] || 0) + 1;
-                return acc;
-            }, {} as { [key: string]: number }),
-        [sortedVarietals]
-    );
+    // Count by type safely
+    const byType = useMemo(() => {
+        try {
+            const counts: { [key: string]: number } = {};
+            for (const v of sortedVarietals) {
+                const type = v.type || 'UNKNOWN';
+                counts[type] = (counts[type] || 0) + 1;
+            }
+            return counts;
+        } catch (e) {
+            console.error('Type count error:', e);
+            return {};
+        }
+    }, [sortedVarietals]);
 
     const renderVarietalItem = ({ item }: { item: Varietal }) => (
         <VarietalCard
             varietal={item}
             onPress={() => {
-                navigation.navigate('VarietalDetail', { varietalId: item.id });
+                try {
+                    navigation.navigate('VarietalDetail', { varietalId: item.id });
+                } catch (e) {
+                    console.error('Navigation error:', e);
+                }
             }}
         />
     );
+
+    const keyExtractor = (item: Varietal) => item.id || String(Math.random());
 
     return (
         <View style={styles.container}>
@@ -212,15 +300,15 @@ export default function VarietalsScreen() {
                 {sortedVarietals.length > 0 && (
                     <View style={styles.statsBar}>
                         <Text style={styles.statsText}>
-                            {stats.totalVarietals.toLocaleString(undefined, { maximumFractionDigits: 0 })} {stats.totalVarietals === 1 ? 'varietal' : 'varietals'}
+                            {formatNumber(stats.totalVarietals)} {stats.totalVarietals === 1 ? 'varietal' : 'varietals'}
                         </Text>
                         <Text style={styles.statsSeparator}>•</Text>
                         <Text style={styles.statsText}>
-                            {stats.totalWines.toLocaleString(undefined, { maximumFractionDigits: 0 })} wines
+                            {formatNumber(stats.totalWines)} wines
                         </Text>
                         <Text style={styles.statsSeparator}>•</Text>
                         <Text style={styles.statsText}>
-                            {stats.totalBottles.toLocaleString(undefined, { maximumFractionDigits: 0 })} bottles
+                            {formatNumber(stats.totalBottles)} bottles
                         </Text>
                     </View>
                 )}
@@ -229,7 +317,7 @@ export default function VarietalsScreen() {
                     <View style={styles.typeFilters}>
                         {Object.entries(byType).map(([type, count]) => (
                             <Chip
-                                key={type}
+                                key={`type-${type}`}
                                 mode="outlined"
                                 compact
                                 style={styles.filterChip}
@@ -256,7 +344,7 @@ export default function VarietalsScreen() {
                 <FlatList
                     data={sortedVarietals}
                     renderItem={renderVarietalItem}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={keyExtractor}
                     contentContainerStyle={styles.list}
                     ListEmptyComponent={
                         <View style={styles.empty}>
@@ -273,9 +361,10 @@ export default function VarietalsScreen() {
                         </View>
                     }
                     onRefresh={refetch}
-                    refreshing={false}
-                    removeClippedSubviews={true}
-                    maxToRenderPerBatch={10}
+                    refreshing={loading}
+                    removeClippedSubviews={false}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={5}
                     windowSize={5}
                 />
             )}
@@ -366,6 +455,9 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         flex: 1,
         marginRight: 8,
+    },
+    typeChip: {
+        // No height to let it size naturally
     },
     typeChipText: {
         fontSize: 11,
