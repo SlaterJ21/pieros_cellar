@@ -148,7 +148,7 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
                         </Chip>
                         {totalValue > 0 && (
                             <Chip mode="outlined" compact style={styles.chipValue} icon="currency-usd">
-                                ${formatNumber(Math.floor(totalValue))}
+                                {formatNumber(Math.floor(totalValue))}
                             </Chip>
                         )}
                     </View>
