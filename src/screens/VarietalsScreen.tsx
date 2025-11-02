@@ -24,6 +24,26 @@ interface Varietal {
     }[];
 }
 
+// Move these functions outside component to prevent recreation on each render
+const getTypeColor = (type: string) => {
+    const colors: { [key: string]: string } = {
+        RED: '#8B2E2E',
+        WHITE: '#FFD700',
+        ROSE: '#FF69B4',
+        SPARKLING: '#9370DB',
+        DESSERT: '#FF8C00',
+        FORTIFIED: '#A0522D',
+        ORANGE: '#FFA500',
+    };
+    return colors[type] || '#666';
+};
+
+const getTypeTextColor = (type: string) => {
+    // Use dark text for light backgrounds
+    const darkTextTypes = ['WHITE', 'ROSE', 'ORANGE', 'DESSERT', 'SPARKLING'];
+    return darkTextTypes.includes(type) ? '#2c2c2c' : getTypeColor(type);
+};
+
 const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; onPress: () => void }) => {
     const wines = varietal.wines || [];
     const totalBottles = wines.reduce((sum, wine) => {
@@ -32,26 +52,6 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
     }, 0);
     const totalValue = wines.reduce((sum, wine) => sum + (wine.currentValue || 0), 0);
     const wineCount = wines.length;
-
-    // Get type color
-    const getTypeColor = (type: string) => {
-        const colors: { [key: string]: string } = {
-            RED: '#8B2E2E',
-            WHITE: '#FFD700',
-            ROSE: '#FF69B4',
-            SPARKLING: '#9370DB',
-            DESSERT: '#FF8C00',
-            FORTIFIED: '#A0522D',
-            ORANGE: '#FFA500',
-        };
-        return colors[type] || '#666';
-    };
-
-    const getTypeTextColor = (type: string) => {
-        // Use dark text for light backgrounds, light text for dark backgrounds
-        const darkTextTypes = ['WHITE', 'ROSE', 'ORANGE', 'DESSERT'];
-        return darkTextTypes.includes(type) ? '#2c2c2c' : getTypeColor(type);
-    };
 
     return (
         <TouchableOpacity onPress={onPress}>
@@ -344,6 +344,8 @@ const styles = StyleSheet.create({
     typeChipText: {
         fontSize: 11,
         fontWeight: '700',
+        lineHeight: 28,
+        justifyContent: 'center',
     },
     description: {
         fontSize: 14,
