@@ -69,6 +69,25 @@ const DELETE_VARIETAL = gql`
     }
 `;
 
+// Move color functions outside component
+const getTypeColor = (type: string) => {
+    const colors: { [key: string]: string } = {
+        RED: '#8B2E2E',
+        WHITE: '#FFD700',
+        ROSE: '#FF69B4',
+        SPARKLING: '#9370DB',
+        DESSERT: '#FF8C00',
+        FORTIFIED: '#A0522D',
+        ORANGE: '#FFA500',
+    };
+    return colors[type] || '#666';
+};
+
+const getTypeTextColor = (type: string) => {
+    const darkTextTypes = ['WHITE', 'ROSE', 'ORANGE', 'DESSERT', 'SPARKLING'];
+    return darkTextTypes.includes(type) ? '#2c2c2c' : getTypeColor(type);
+};
+
 export default function VarietalDetailScreen() {
     const navigation = useNavigation<NavigationProp>();
     const route = useRoute<VarietalDetailRouteProp>();
@@ -137,20 +156,6 @@ export default function VarietalDetailScreen() {
         return sum + (parseFloat(value) * wine.quantity);
     }, 0);
 
-    // Get type color
-    const getTypeColor = (type: string) => {
-        const colors: { [key: string]: string } = {
-            RED: '#8B2E2E',
-            WHITE: '#FFD700',
-            ROSE: '#FF69B4',
-            SPARKLING: '#9370DB',
-            DESSERT: '#FF8C00',
-            FORTIFIED: '#A0522D',
-            ORANGE: '#FFA500',
-        };
-        return colors[type] || '#666';
-    };
-
     // Group wines by winery
     const winesByWinery = varietal.wines.reduce((acc: any, wine: any) => {
         const wineryName = wine.winery?.name || 'Unknown Winery';
@@ -173,7 +178,7 @@ export default function VarietalDetailScreen() {
                                 <Chip
                                     mode="flat"
                                     style={[styles.typeChip, { backgroundColor: getTypeColor(varietal.type) + '20' }]}
-                                    textStyle={[styles.typeChipText, { color: getTypeColor(varietal.type) }]}
+                                    textStyle={[styles.typeChipText, { color: getTypeTextColor(varietal.type) }]}
                                 >
                                     {varietal.type}
                                 </Chip>

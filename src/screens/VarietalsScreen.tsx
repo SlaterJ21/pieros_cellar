@@ -53,6 +53,11 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
     const totalValue = wines.reduce((sum, wine) => sum + (wine.currentValue || 0), 0);
     const wineCount = wines.length;
 
+    // Compute colors once before render
+    const typeColor = getTypeColor(varietal.type);
+    const typeTextColor = getTypeTextColor(varietal.type);
+    const chipBgColor = typeColor + '20';
+
     return (
         <TouchableOpacity onPress={onPress}>
             <Card style={styles.card}>
@@ -62,8 +67,8 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
                         <Chip
                             mode="flat"
                             compact
-                            style={{ backgroundColor: getTypeColor(varietal.type) + '20' }}
-                            textStyle={[styles.typeChipText, { color: getTypeTextColor(varietal.type) }]}
+                            style={{ backgroundColor: chipBgColor }}
+                            textStyle={[styles.typeChipText, { color: typeTextColor }]}
                         >
                             {varietal.type}
                         </Chip>
@@ -344,8 +349,6 @@ const styles = StyleSheet.create({
     typeChipText: {
         fontSize: 11,
         fontWeight: '700',
-        lineHeight: 28,
-        justifyContent: 'center',
     },
     description: {
         fontSize: 14,
