@@ -1,5 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, FlatList, Modal as RNModal, TouchableOpacity } from 'react-native';
+import {
+    View,
+    StyleSheet,
+    FlatList,
+    Modal as RNModal,
+    TouchableOpacity,
+    Keyboard,
+    TouchableWithoutFeedback,
+    ScrollView,
+    Platform,
+} from 'react-native';
 import {
     Searchbar,
     List,
@@ -21,7 +31,7 @@ interface VarietalSelectorProps {
     onDismiss: () => void;
     selectedVarietalId?: string | null;
     onSelect: (varietalId: string, varietalName: string) => void;
-    wineType?: string; // Filter by wine type
+    wineType?: string;
 }
 
 export default function VarietalSelector({
@@ -51,7 +61,6 @@ export default function VarietalSelector({
         refetchQueries: [{ query: GET_VARIETALS }],
     });
 
-    // Filter varietals based on search
     const filteredVarietals = useMemo(() => {
         if (!data?.varietals) return [];
 
@@ -70,7 +79,6 @@ export default function VarietalSelector({
         if (!newVarietal.name.trim()) return;
 
         try {
-            // Parse comma-separated values into arrays
             const aliases = newVarietal.aliases
                 .split(',')
                 .map(a => a.trim())
@@ -99,6 +107,7 @@ export default function VarietalSelector({
             setShowAddForm(false);
             setNewVarietal({ name: '', description: '', aliases: '', characteristics: '' });
             setSearchQuery('');
+            Keyboard.dismiss();
             onDismiss();
         } catch (error) {
             console.error('Error creating varietal:', error);
@@ -113,10 +122,17 @@ export default function VarietalSelector({
     };
 
     const handleClose = () => {
+        Keyboard.dismiss();
         setShowAddForm(false);
         setSearchQuery('');
         setNewVarietal({ name: '', description: '', aliases: '', characteristics: '' });
         onDismiss();
+    };
+
+    const handleBackToList = () => {
+        Keyboard.dismiss();
+        setShowAddForm(false);
+        setNewVarietal({ name: '', description: '', aliases: '', characteristics: '' });
     };
 
     return (
@@ -127,210 +143,231 @@ export default function VarietalSelector({
             onRequestClose={handleClose}
             statusBarTranslucent
         >
-            <TouchableOpacity
-                style={styles.modalOverlay}
-                activeOpacity={1}
-                onPress={handleClose}
-            >
-                <TouchableOpacity
-                    activeOpacity={1}
-                    onPress={(e) => e.stopPropagation()}
-                    style={styles.modalWrapper}
-                >
-                    <Surface style={styles.modalContent} elevation={5}>
-                        {/* Header */}
-                        <View style={styles.header}>
-                            <Text style={styles.title}>
-                                {showAddForm ? 'Add New Varietal' : 'Select Varietal'}
-                            </Text>
-                            <IconButton
-                                icon="close"
-                                size={24}
-                                onPress={handleClose}
-                            />
-                        </View>
-
-                        {!showAddForm ? (
-                            <>
-                                {/* Search Bar */}
-                                <Searchbar
-                                    placeholder="Search varietals..."
-                                    onChangeText={setSearchQuery}
-                                    value={searchQuery}
-                                    style={styles.searchbar}
+            <TouchableWithoutFeedback onPress={handleClose}>
+                <View style={styles.modalOverlay}>
+                    <TouchableWithoutFeedback onPress={() => {}}>
+                        <Surface style={styles.modalContent} elevation={5}>
+                            {/* Header */}
+                            <View style={styles.header}>
+                                <Text style={styles.title}>
+                                    {showAddForm ? 'Add New Varietal' : 'Select Varietal'}
+                                </Text>
+                                <IconButton
+                                    icon="close"
+                                    size={24}
+                                    onPress={handleClose}
                                 />
+                            </View>
 
-                                {/* Varietals List */}
-                                {loading ? (
-                                    <View style={styles.centered}>
-                                        <ActivityIndicator size="large" color="#8B2E2E" />
-                                        <Text style={styles.loadingText}>Loading varietals...</Text>
+                            {!showAddForm ? (
+                                <>
+                                    {/* Search Bar */}
+                                    <Searchbar
+                                        placeholder="Search varietals..."
+                                        onChangeText={setSearchQuery}
+                                        value={searchQuery}
+                                        style={styles.searchbar}
+                                    />
+
+                                    {/* Varietals List */}
+                                    {loading ? (
+                                        <View style={styles.centered}>
+                                            <ActivityIndicator size="large" color="#8B2E2E" />
+                                            <Text style={styles.loadingText}>Loading varietals...</Text>
+                                        </View>
+                                    ) : error ? (
+                                        <View style={styles.centered}>
+                                            <Text style={styles.errorIcon}>⚠️</Text>
+                                            <Text style={styles.error}>Error loading varietals</Text>
+                                            <Text style={styles.errorDetail}>{error.message}</Text>
+                                        </View>
+                                    ) : (
+                                        <FlatList
+                                            data={filteredVarietals}
+                                            keyExtractor={(item) => item.id}
+                                            style={styles.list}
+                                            contentContainerStyle={styles.listContent}
+                                            renderItem={({ item }) => (
+                                                <List.Item
+                                                    title={item.name}
+                                                    titleStyle={styles.listItemTitle}
+                                                    description={
+                                                        <View style={styles.description}>
+                                                            {item.aliases && item.aliases.length > 0 && (
+                                                                <Text style={styles.aliases}>
+                                                                    Also known as: {item.aliases.join(', ')}
+                                                                </Text>
+                                                            )}
+                                                            {item.characteristics && item.characteristics.length > 0 && (
+                                                                <View style={styles.characteristics}>
+                                                                    {item.characteristics.slice(0, 3).map((char: string) => (
+                                                                        <Chip key={char} style={styles.chip} compact textStyle={styles.chipText}>
+                                                                            {char}
+                                                                        </Chip>
+                                                                    ))}
+                                                                </View>
+                                                            )}
+                                                        </View>
+                                                    }
+                                                    onPress={() => handleSelect(item.id, item.name)}
+                                                    left={(props) => (
+                                                        <List.Icon
+                                                            {...props}
+                                                            icon='fruit-grapes'
+                                                            color='#8B2E2E'
+                                                        />
+                                                    )}
+                                                    style={[
+                                                        styles.listItem,
+                                                        item.id === selectedVarietalId && styles.selectedItem,
+                                                    ]}
+                                                />
+                                            )}
+                                            ListEmptyComponent={
+                                                <View style={styles.empty}>
+                                                    <Text style={styles.emptyIcon}>🍇</Text>
+                                                    <Text style={styles.emptyText}>
+                                                        {searchQuery ? 'No varietals found' : 'No varietals available'}
+                                                    </Text>
+                                                    <Text style={styles.emptySubtext}>
+                                                        {searchQuery
+                                                            ? 'Try a different search term or add a new varietal'
+                                                            : 'Add your first varietal below'}
+                                                    </Text>
+                                                </View>
+                                            }
+                                        />
+                                    )}
+
+                                    {/* Bottom Buttons */}
+                                    <View style={styles.bottomButtons}>
+                                        <Button
+                                            mode="contained"
+                                            onPress={() => setShowAddForm(true)}
+                                            icon="plus"
+                                            style={styles.addButton}
+                                            buttonColor="#8B2E2E"
+                                            contentStyle={styles.buttonContent}
+                                        >
+                                            Add New Varietal
+                                        </Button>
                                     </View>
-                                ) : error ? (
-                                    <View style={styles.centered}>
-                                        <Text style={styles.errorIcon}>⚠️</Text>
-                                        <Text style={styles.error}>Error loading varietals</Text>
-                                        <Text style={styles.errorDetail}>{error.message}</Text>
-                                    </View>
-                                ) : (
-                                    <FlatList
-                                        data={filteredVarietals}
-                                        keyExtractor={(item) => item.id}
-                                        style={styles.list}
-                                        contentContainerStyle={styles.listContent}
-                                        renderItem={({ item }) => (
-                                            <List.Item
-                                                title={item.name}
-                                                titleStyle={styles.listItemTitle}
-                                                description={
-                                                    <View style={styles.description}>
-                                                        {item.aliases && item.aliases.length > 0 && (
-                                                            <Text style={styles.aliases}>
-                                                                Also known as: {item.aliases.join(', ')}
-                                                            </Text>
-                                                        )}
-                                                        {item.characteristics && item.characteristics.length > 0 && (
-                                                            <View style={styles.characteristics}>
-                                                                {item.characteristics.slice(0, 3).map((char: string) => (
-                                                                    <Chip key={char} style={styles.chip} compact textStyle={styles.chipText}>
-                                                                        {char}
-                                                                    </Chip>
-                                                                ))}
-                                                            </View>
-                                                        )}
-                                                    </View>
-                                                }
-                                                onPress={() => handleSelect(item.id, item.name)}
-                                                left={(props) => (
-                                                    <List.Icon
-                                                        {...props}
-                                                        icon={item.id === selectedVarietalId ? 'check-circle' : 'fruits-grape'}
-                                                        color={item.id === selectedVarietalId ? '#8B2E2E' : '#8B2E2E'}
-                                                    />
-                                                )}
-                                                style={[
-                                                    styles.listItem,
-                                                    item.id === selectedVarietalId && styles.selectedItem,
-                                                ]}
+                                </>
+                            ) : (
+                                <>
+                                    {/* Add Varietal Form */}
+                                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                                        <ScrollView
+                                            style={styles.formScroll}
+                                            contentContainerStyle={styles.form}
+                                            keyboardShouldPersistTaps="handled"
+                                        >
+                                            <TextInput
+                                                label="Varietal Name *"
+                                                value={newVarietal.name}
+                                                onChangeText={(text) => setNewVarietal({ ...newVarietal, name: text })}
+                                                style={styles.input}
+                                                mode="outlined"
+                                                autoFocus
+                                                placeholder="e.g., Cabernet Sauvignon"
+                                                returnKeyType="next"
                                             />
-                                        )}
-                                        ListEmptyComponent={
-                                            <View style={styles.empty}>
-                                                <Text style={styles.emptyIcon}>🍇</Text>
-                                                <Text style={styles.emptyText}>
-                                                    {searchQuery ? 'No varietals found' : 'No varietals available'}
-                                                </Text>
-                                                <Text style={styles.emptySubtext}>
-                                                    {searchQuery
-                                                        ? 'Try a different search term or add a new varietal'
-                                                        : 'Add your first varietal below'}
-                                                </Text>
-                                            </View>
-                                        }
-                                    />
-                                )}
+                                            <HelperText type="info" visible={!newVarietal.name}>
+                                                Required
+                                            </HelperText>
 
-                                {/* Bottom Buttons */}
-                                <View style={styles.bottomButtons}>
-                                    <Button
-                                        mode="contained"
-                                        onPress={() => setShowAddForm(true)}
-                                        icon="plus"
-                                        style={styles.addButton}
-                                        buttonColor="#8B2E2E"
-                                        contentStyle={styles.buttonContent}
-                                    >
-                                        Add New Varietal
-                                    </Button>
-                                </View>
-                            </>
-                        ) : (
-                            <>
-                                {/* Add Varietal Form */}
-                                <View style={styles.form}>
-                                    <TextInput
-                                        label="Varietal Name *"
-                                        value={newVarietal.name}
-                                        onChangeText={(text) => setNewVarietal({ ...newVarietal, name: text })}
-                                        style={styles.input}
-                                        mode="outlined"
-                                        autoFocus
-                                        placeholder="e.g., Cabernet Sauvignon"
-                                    />
-                                    <HelperText type="info" visible={!newVarietal.name}>
-                                        Required
-                                    </HelperText>
+                                            <TextInput
+                                                label="Description"
+                                                value={newVarietal.description}
+                                                onChangeText={(text) => setNewVarietal({ ...newVarietal, description: text })}
+                                                style={styles.input}
+                                                mode="outlined"
+                                                multiline
+                                                numberOfLines={2}
+                                                placeholder="Brief description of this varietal"
+                                                returnKeyType="done"
+                                                blurOnSubmit={true}
+                                                onSubmitEditing={Keyboard.dismiss}
+                                            />
 
-                                    <TextInput
-                                        label="Description"
-                                        value={newVarietal.description}
-                                        onChangeText={(text) => setNewVarietal({ ...newVarietal, description: text })}
-                                        style={styles.input}
-                                        mode="outlined"
-                                        multiline
-                                        numberOfLines={2}
-                                        placeholder="Brief description of this varietal"
-                                    />
+                                            <TextInput
+                                                label="Aliases"
+                                                value={newVarietal.aliases}
+                                                onChangeText={(text) => setNewVarietal({ ...newVarietal, aliases: text })}
+                                                style={styles.input}
+                                                mode="outlined"
+                                                placeholder="e.g., Shiraz, Syrah (comma-separated)"
+                                                returnKeyType="done"
+                                                blurOnSubmit={true}
+                                                onSubmitEditing={Keyboard.dismiss}
+                                            />
+                                            <HelperText type="info" visible={true}>
+                                                Enter alternative names separated by commas
+                                            </HelperText>
 
-                                    <TextInput
-                                        label="Aliases"
-                                        value={newVarietal.aliases}
-                                        onChangeText={(text) => setNewVarietal({ ...newVarietal, aliases: text })}
-                                        style={styles.input}
-                                        mode="outlined"
-                                        placeholder="e.g., Shiraz, Syrah (comma-separated)"
-                                    />
-                                    <HelperText type="info" visible={true}>
-                                        Enter alternative names separated by commas
-                                    </HelperText>
+                                            <TextInput
+                                                label="Characteristics"
+                                                value={newVarietal.characteristics}
+                                                onChangeText={(text) => setNewVarietal({ ...newVarietal, characteristics: text })}
+                                                style={styles.input}
+                                                mode="outlined"
+                                                multiline
+                                                numberOfLines={2}
+                                                placeholder="e.g., Full-bodied, Dark fruit, High tannins (comma-separated)"
+                                                returnKeyType="done"
+                                                blurOnSubmit={true}
+                                                onSubmitEditing={Keyboard.dismiss}
+                                            />
+                                            <HelperText type="info" visible={true}>
+                                                Enter characteristics separated by commas
+                                            </HelperText>
 
-                                    <TextInput
-                                        label="Characteristics"
-                                        value={newVarietal.characteristics}
-                                        onChangeText={(text) => setNewVarietal({ ...newVarietal, characteristics: text })}
-                                        style={styles.input}
-                                        mode="outlined"
-                                        multiline
-                                        numberOfLines={2}
-                                        placeholder="e.g., Full-bodied, Dark fruit, High tannins (comma-separated)"
-                                    />
-                                    <HelperText type="info" visible={true}>
-                                        Enter characteristics separated by commas
-                                    </HelperText>
-                                </View>
+                                            {/* Extra space for keyboard */}
+                                            <View style={{ height: 120 }} />
+                                        </ScrollView>
+                                    </TouchableWithoutFeedback>
 
-                                {/* Form Buttons */}
-                                <View style={styles.formButtons}>
-                                    <Button
-                                        mode="contained"
-                                        onPress={handleCreateVarietal}
-                                        loading={creating}
-                                        disabled={!newVarietal.name.trim() || creating}
-                                        style={styles.createButton}
-                                        buttonColor="#8B2E2E"
-                                        icon="check"
-                                        contentStyle={styles.buttonContent}
-                                    >
-                                        Create Varietal
-                                    </Button>
-                                    <Button
-                                        mode="outlined"
-                                        onPress={() => {
-                                            setShowAddForm(false);
-                                            setNewVarietal({ name: '', description: '', aliases: '', characteristics: '' });
-                                        }}
-                                        disabled={creating}
-                                        style={styles.backButton}
-                                        contentStyle={styles.buttonContent}
-                                    >
-                                        Back to List
-                                    </Button>
-                                </View>
-                            </>
-                        )}
-                    </Surface>
-                </TouchableOpacity>
-            </TouchableOpacity>
+                                    {/* Form Buttons */}
+                                    <View style={styles.formButtons}>
+                                        {/*{Platform.OS === 'ios' && (*/}
+                                        {/*    <Button*/}
+                                        {/*        mode="text"*/}
+                                        {/*        onPress={Keyboard.dismiss}*/}
+                                        {/*        textColor="#8B2E2E"*/}
+                                        {/*        icon="keyboard-close"*/}
+                                        {/*        style={styles.doneButton}*/}
+                                        {/*    >*/}
+                                        {/*        Done Editing*/}
+                                        {/*    </Button>*/}
+                                        {/*)}*/}
+                                        <Button
+                                            mode="contained"
+                                            onPress={handleCreateVarietal}
+                                            loading={creating}
+                                            disabled={!newVarietal.name.trim() || creating}
+                                            style={styles.createButton}
+                                            buttonColor="#8B2E2E"
+                                            icon="check"
+                                            contentStyle={styles.buttonContent}
+                                        >
+                                            Create Varietal
+                                        </Button>
+                                        <Button
+                                            mode="outlined"
+                                            onPress={handleBackToList}
+                                            disabled={creating}
+                                            style={styles.backButton}
+                                            contentStyle={styles.buttonContent}
+                                        >
+                                            Back to List
+                                        </Button>
+                                    </View>
+                                </>
+                            )}
+                        </Surface>
+                    </TouchableWithoutFeedback>
+                </View>
+            </TouchableWithoutFeedback>
         </RNModal>
     );
 }
@@ -343,15 +380,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 16,
     },
-    modalWrapper: {
-        width: '100%',
-        height: '90%',
-        maxWidth: 600,
-    },
     modalContent: {
         backgroundColor: '#fff',
         borderRadius: 16,
-        flex: 1,
+        width: '100%',
+        maxWidth: 600,
+        height: '90%',
         overflow: 'hidden',
     },
     header: {
@@ -383,9 +417,16 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
     },
     listItem: {
-        paddingVertical: 12,
+        paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
+    },
+    characteristics: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 4,
+        marginHorizontal: -2,
+        paddingBottom: 4,
     },
     selectedItem: {
         backgroundColor: '#fef3f3',
@@ -397,6 +438,7 @@ const styles = StyleSheet.create({
     },
     description: {
         marginTop: 4,
+        paddingBottom: 8,
     },
     aliases: {
         fontSize: 12,
@@ -404,16 +446,11 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         marginBottom: 6,
     },
-    characteristics: {
-        height: 26,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-        marginTop: 4,
-    },
     chip: {
         backgroundColor: '#E8F5E9',
         height: 32,
+        marginHorizontal: 2,
+        marginVertical: 2,
     },
     chipText: {
         fontSize: 11,
@@ -481,9 +518,12 @@ const styles = StyleSheet.create({
     buttonContent: {
         height: 48,
     },
+    formScroll: {
+        flex: 1,
+    },
     form: {
         padding: 20,
-        flex: 1,
+        paddingBottom: 40,
     },
     input: {
         marginBottom: 8,
@@ -491,10 +531,14 @@ const styles = StyleSheet.create({
     },
     formButtons: {
         padding: 20,
-        gap: 12,
+        paddingTop: 12,
+        gap: 8,
         borderTopWidth: 1,
         borderTopColor: '#e0e0e0',
         backgroundColor: '#fff',
+    },
+    doneButton: {
+        marginBottom: 4,
     },
     createButton: {
         width: '100%',

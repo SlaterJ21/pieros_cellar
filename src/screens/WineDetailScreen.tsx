@@ -256,8 +256,7 @@ export default function WineDetailScreen({ navigation, route }: Props) {
                             )}
                             <Chip
                                 icon="bottle-wine"
-                                style={[styles.chip, styles.typeChip]}
-                                textStyle={styles.typeChipText}
+                                style={styles.chip}
                             >
                                 {wine.type}
                             </Chip>
@@ -867,19 +866,17 @@ const styles = StyleSheet.create({
         color: '#fff',
     },
     statusChipReady: {
-        backgroundColor: '#4CAF50',
         alignSelf: 'flex-start',
     },
     statusChipReserved: {
-        backgroundColor: '#FFD700',
         alignSelf: 'flex-start',
     },
     statusChipText: {
-        color: '#fff',
+        color: '#8B2E2E',
         fontWeight: '600',
     },
     divider: {
-        marginVertical: 16,
+        marginVertical: 8,
     },
     quantityCard: {
         backgroundColor: '#fff',

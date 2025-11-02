@@ -90,7 +90,7 @@ export default function StatsScreen() {
         .slice(0, 5);
 
     // Prepare chart data
-    const typeColors = ['#8B2E2E', '#FFD700', '#FF69B4', '#9370DB', '#20B2AA', '#FF8C00', '#32CD32'];
+    const typeColors = ['#8B2E2ECC', '#FFD700CC', '#FF69B4CC', '#9370DBCC', '#20B2AACC', '#FF8C00CC', '#32CD32CC'];
 
     const pieChartData = stats?.byType.map((item: any, index: number) => ({
         name: item.type,

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Searchbar, Card, Chip, FAB, ActivityIndicator, Text, IconButton, Badge, Menu } from 'react-native-paper';
+import { Searchbar, Card, Chip, FAB, ActivityIndicator, Text, IconButton, Badge, Menu, Icon } from 'react-native-paper';
 import { useQuery } from '@apollo/client/react';
 import { GET_WINES } from '@/graphql/queries/wines';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,13 +21,12 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 // Helper function to safely get varietal name
 const getVarietalName = (varietal: any): string | null => {
     if (!varietal) return null;
-    // Handle both old string format and new object format
     if (typeof varietal === 'string') return varietal;
     if (typeof varietal === 'object' && varietal.name) return varietal.name;
     return null;
 };
 
-// Wine card component to prevent re-renders
+// Wine card component with colored border on image
 const WineCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, lowQuantityCheck }: any) => {
     const [imageError, setImageError] = useState(false);
     const primaryPhoto = item.photos?.find((p: any) => p.isPrimary) || item.photos?.[0];
@@ -41,77 +40,109 @@ const WineCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, lowQ
 
     const isLowQuantity = lowQuantityCheck(item.quantity);
 
+    // Get type color
+    const getTypeColor = (type: string) => {
+        const colors: { [key: string]: string } = {
+            RED: '#8B2E2E',
+            WHITE: '#FFD700',
+            ROSE: '#FF69B4',
+            SPARKLING: '#9370DB',
+            DESSERT: '#FF8C00',
+            FORTIFIED: '#A0522D',
+            ORANGE: '#FFA500',
+        };
+        return colors[type] || '#666';
+    };
+
     return (
         <TouchableOpacity onPress={onPress}>
             <Card style={styles.card}>
                 <Card.Content style={styles.cardContent}>
-                    {primaryPhoto && !imageError ? (
-                        <Image
-                            source={{ uri: primaryPhoto.url }}
-                            style={styles.wineImage}
-                            resizeMode="cover"
-                            onError={() => setImageError(true)}
-                            fadeDuration={0}
-                        />
-                    ) : (
-                        <View style={styles.wineImagePlaceholder}>
-                            <Text style={styles.placeholderText}>🍷</Text>
+                    {/* Left Column: Image with colored border */}
+                    <View style={styles.leftColumn}>
+                        <View style={[styles.imageWrapper, { borderColor: getTypeColor(item.type) }]}>
+                            {primaryPhoto && !imageError ? (
+                                <Image
+                                    source={{ uri: primaryPhoto.url }}
+                                    style={styles.wineImage}
+                                    resizeMode="cover"
+                                    onError={() => setImageError(true)}
+                                    fadeDuration={0}
+                                />
+                            ) : (
+                                <View style={styles.wineImagePlaceholder}>
+                                    <Text style={styles.placeholderText}>🍷</Text>
+                                </View>
+                            )}
                         </View>
-                    )}
+                    </View>
+
+                    {/* Right Column: Wine Info */}
                     <View style={styles.wineInfo}>
-                        <View style={styles.nameRow}>
-                            <Text variant="titleLarge" style={styles.wineName} numberOfLines={2}>
-                                {item.name}
-                            </Text>
-                            {isLowQuantity && (
-                                <Badge size={20} style={styles.lowStockBadge}>!</Badge>
-                            )}
+                        <View style={styles.headerRow}>
+                            <View style={styles.nameColumn}>
+                                <Text variant="titleLarge" style={styles.wineName} numberOfLines={2}>
+                                    {item.name}
+                                </Text>
+                                <Text style={styles.winery} numberOfLines={1}>
+                                    {winery?.name || 'Unknown Winery'}
+                                </Text>
+                            </View>
+                            <View style={styles.quantityBadge}>
+                                <Text style={styles.quantityX}>×</Text>
+                                <Text style={styles.quantityText}>{item.quantity}</Text>
+                            </View>
                         </View>
 
-                        <Text variant="bodyMedium" style={styles.winery} numberOfLines={1}>
-                            {winery?.name || 'Unknown Winery'}
-                        </Text>
-
-                        <View style={styles.details}>
-                            {displayPrefs.showVintage && item.vintage && (
-                                <Chip mode="outlined" compact style={styles.chip}>
-                                    {item.vintage}
-                                </Chip>
-                            )}
-                            <Chip
-                                mode="outlined"
-                                compact
-                                style={[styles.chip, styles.chip]}
-                            >
-                                {item.type}
-                            </Chip>
-                            {displayPrefs.showQuantity && item.quantity > 1 && (
-                                <Chip mode="outlined" compact style={styles.chipQuantity}>
-                                    Qty: {item.quantity}
-                                </Chip>
-                            )}
-                        </View>
-
-                        {varietalName && (
-                            <Text variant="bodyMedium" style={styles.varietal} numberOfLines={1}>
-                                {varietalName}
-                            </Text>
-                        )}
+                        {/* Vintage and Varietal Row with Icons */}
+                        {(displayPrefs.showVintage && item.vintage) || varietalName ? (
+                            <View style={styles.metaRow}>
+                                {displayPrefs.showVintage && item.vintage && (
+                                    <View style={styles.metaItem}>
+                                        <Icon source="calendar" size={14} color="#666" />
+                                        <Text style={styles.metaText}>{item.vintage}</Text>
+                                    </View>
+                                )}
+                                {varietalName && (
+                                    <View style={styles.metaItem}>
+                                        <Icon source="fruit-grapes" size={14} color="#666" />
+                                        <Text style={styles.metaText} numberOfLines={1}>{varietalName}</Text>
+                                    </View>
+                                )}
+                            </View>
+                        ) : null}
 
                         {location && (
-                            <Text variant="bodyMedium" style={styles.location} numberOfLines={1}>
-                                📍 {location}
-                            </Text>
+                            <View style={styles.locationRow}>
+                                <Icon source="map-marker" size={14} color="#666" />
+                                <Text style={styles.location} numberOfLines={1}>
+                                    {location}
+                                </Text>
+                            </View>
                         )}
 
+                        {isLowQuantity && (
+                            <Chip
+                                mode="flat"
+                                compact
+                                style={styles.lowStockChip}
+                                textStyle={styles.lowStockText}
+                            >
+                                Low Stock
+                            </Chip>
+                        )}
+
+                        {/* Bottom Row with Value and Rating */}
                         <View style={styles.bottomRow}>
-                            {displayPrefs.showValue && item.currentValue && (
-                                <Text variant="bodyMedium" style={styles.value}>
-                                    {currencyFormat(parseFloat(item.currentValue))}
-                                </Text>
-                            )}
+                            <View style={styles.leftBottomSection}>
+                                {displayPrefs.showValue && item.currentValue && (
+                                    <Text style={styles.value}>
+                                        {currencyFormat(parseFloat(item.currentValue))}
+                                    </Text>
+                                )}
+                            </View>
                             {item.personalRating && (
-                                <Text variant="bodyMedium" style={styles.rating}>
+                                <Text style={styles.rating}>
                                     ⭐ {item.personalRating}
                                 </Text>
                             )}
@@ -122,7 +153,6 @@ const WineCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, lowQ
         </TouchableOpacity>
     );
 }, (prevProps, nextProps) => {
-    // FIXED: Add photo comparison to detect changes
     const prevPhotos = prevProps.item.photos?.length || 0;
     const nextPhotos = nextProps.item.photos?.length || 0;
     const prevPrimaryPhoto = prevProps.item.photos?.find((p: any) => p.isPrimary)?.url ||
@@ -141,11 +171,25 @@ const WineCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, lowQ
     );
 });
 
-// Grid view wine card
+// Grid view wine card with colored banner
 const WineGridCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, lowQuantityCheck }: any) => {
     const [imageError, setImageError] = useState(false);
     const primaryPhoto = item.photos?.find((p: any) => p.isPrimary) || item.photos?.[0];
+    const varietalName = getVarietalName(item.varietal);
     const isLowQuantity = lowQuantityCheck(item.quantity);
+
+    const getTypeColor = (type: string) => {
+        const colors: { [key: string]: string } = {
+            RED: '#8B2E2E',
+            WHITE: '#FFD700',
+            ROSE: '#FF69B4',
+            SPARKLING: '#9370DB',
+            DESSERT: '#FF8C00',
+            FORTIFIED: '#A0522D',
+            ORANGE: '#FFA500',
+        };
+        return colors[type] || '#666';
+    };
 
     return (
         <TouchableOpacity onPress={onPress} style={styles.gridCardContainer}>
@@ -164,9 +208,14 @@ const WineGridCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, 
                             <Text style={styles.placeholderText}>🍷</Text>
                         </View>
                     )}
-                    {isLowQuantity && (
-                        <Badge size={20} style={styles.gridLowStockBadge}>!</Badge>
-                    )}
+
+                    {/* Colored banner at bottom of image */}
+                    <View style={[styles.typeBanner, { backgroundColor: getTypeColor(item.type) }]} />
+
+                    <View style={styles.gridQuantityBadge}>
+                        <Text style={styles.gridQuantityX}>×</Text>
+                        <Text style={styles.gridQuantityText}>{item.quantity}</Text>
+                    </View>
                 </View>
 
                 <Card.Content style={styles.gridCardContent}>
@@ -174,26 +223,41 @@ const WineGridCard = React.memo(({ item, onPress, displayPrefs, currencyFormat, 
                         {item.name}
                     </Text>
 
-                    {displayPrefs.showVintage && item.vintage && (
-                        <Text style={styles.gridVintage}>{item.vintage}</Text>
+                    {/* Vintage and Varietal Row with Icons */}
+                    {(displayPrefs.showVintage && item.vintage) || varietalName ? (
+                        <View style={styles.gridMetaRow}>
+                            {displayPrefs.showVintage && item.vintage && (
+                                <View style={styles.gridMetaItem}>
+                                    <Icon source="calendar" size={12} color="#666" />
+                                    <Text style={styles.gridMetaText}>{item.vintage}</Text>
+                                </View>
+                            )}
+                            {varietalName && (
+                                <View style={styles.gridMetaItem}>
+                                    <Icon source="fruit-grapes" size={12} color="#666" />
+                                    <Text style={styles.gridMetaText} numberOfLines={1}>{varietalName}</Text>
+                                </View>
+                            )}
+                        </View>
+                    ) : null}
+
+                    {isLowQuantity && (
+                        <Badge size={16} style={styles.gridLowStockBadge}>!</Badge>
                     )}
 
-                    <View style={styles.gridDetails}>
-                        <Chip mode="outlined" compact style={[styles.chip, styles.typeChip]} textStyle={styles.chipText}>
-                            {item.type}
-                        </Chip>
-                        {displayPrefs.showQuantity && (
-                            <Chip mode="outlined" compact style={styles.chipQuantity}>
-                                {item.quantity}
-                            </Chip>
+                    {/* Bottom row with value and rating */}
+                    <View style={styles.gridBottomRow}>
+                        {displayPrefs.showValue && item.currentValue && (
+                            <Text style={styles.gridValue}>
+                                {currencyFormat(parseFloat(item.currentValue))}
+                            </Text>
+                        )}
+                        {item.personalRating && (
+                            <Text style={styles.gridRating}>
+                                ⭐ {item.personalRating}
+                            </Text>
                         )}
                     </View>
-
-                    {displayPrefs.showValue && item.currentValue && (
-                        <Text style={styles.gridValue}>
-                            {currencyFormat(parseFloat(item.currentValue))}
-                        </Text>
-                    )}
                 </Card.Content>
             </Card>
         </TouchableOpacity>
@@ -224,7 +288,6 @@ export default function InventoryScreen() {
     const [viewMenuVisible, setViewMenuVisible] = useState(false);
     const debouncedSearch = useDebounce(searchQuery, 300);
 
-    // Settings hooks - these will automatically refresh when settings change
     const { showEmpty } = useShowEmptyBottles();
     const { sortOrder, sortFunction, loading: sortLoading } = useSortPreference();
     const { viewStyle } = useViewStyle();
@@ -232,7 +295,6 @@ export default function InventoryScreen() {
     const { formatPrice } = useCurrency();
     const { isQuantityLow } = useLowQuantityAlert();
 
-    // Create stable displayPrefs object using useMemo
     const displayPrefs = useMemo(() => ({
         showVintage,
         showQuantity,
@@ -248,19 +310,15 @@ export default function InventoryScreen() {
         notifyOnNetworkStatusChange: false,
     });
 
-    // Apply settings to wine list
     const processedWines = useMemo(() => {
-
         if (!data?.wines) return [];
 
         let wines = [...data.wines];
 
-        // Filter empty bottles if setting is disabled
         if (!showEmpty) {
             wines = wines.filter(wine => wine.quantity > 0);
         }
 
-        // Apply sort order
         if (!sortLoading && sortFunction) {
             wines.sort(sortFunction);
         }
@@ -329,7 +387,6 @@ export default function InventoryScreen() {
                     )}
 
                     <View style={styles.controlButtons}>
-                        {/* View Style Toggle */}
                         <Menu
                             visible={viewMenuVisible}
                             onDismiss={() => setViewMenuVisible(false)}
@@ -341,11 +398,10 @@ export default function InventoryScreen() {
                                     style={styles.controlButton}
                                 />
                             }>
-                            <Menu.Item onPress={() => { /* View is controlled by settings */ }} title={`Current: ${viewStyle}`} disabled />
+                            <Menu.Item onPress={() => { }} title={`Current: ${viewStyle}`} disabled />
                             <Menu.Item onPress={() => navigation.navigate('Settings')} title="Change in Settings" />
                         </Menu>
 
-                        {/* Sort Menu */}
                         <Menu
                             visible={sortMenuVisible}
                             onDismiss={() => setSortMenuVisible(false)}
@@ -357,7 +413,7 @@ export default function InventoryScreen() {
                                     style={styles.controlButton}
                                 />
                             }>
-                            <Menu.Item onPress={() => { /* Sort is controlled by settings */ }} title={`Current: ${sortOrder}`} disabled />
+                            <Menu.Item onPress={() => { }} title={`Current: ${sortOrder}`} disabled />
                             <Menu.Item onPress={() => navigation.navigate('Settings')} title="Change in Settings" />
                         </Menu>
                     </View>
@@ -382,7 +438,7 @@ export default function InventoryScreen() {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.list}
                     numColumns={isGrid ? 2 : 1}
-                    key={isGrid ? 'grid' : 'list'} // Force re-render when switching views
+                    key={isGrid ? 'grid' : 'list'}
                     columnWrapperStyle={isGrid ? styles.gridRow : undefined}
                     ListEmptyComponent={
                         <View style={styles.empty}>
@@ -438,17 +494,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
     },
-    centered: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    loadingText: {
-        marginTop: 12,
-        color: '#666',
-        fontSize: 16,
-    },
     searchbar: {
         flex: 1,
         marginRight: 8,
@@ -483,12 +528,24 @@ const styles = StyleSheet.create({
     controlButton: {
         margin: 0,
     },
+    centered: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    loadingText: {
+        marginTop: 12,
+        color: '#666',
+        fontSize: 16,
+    },
     list: {
         padding: 16,
     },
     gridRow: {
         justifyContent: 'space-between',
     },
+    // List Card Styles with colored border on image
     card: {
         marginBottom: 12,
         backgroundColor: '#fff',
@@ -499,19 +556,23 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         padding: 12,
     },
+    leftColumn: {
+        marginRight: 12,
+    },
+    imageWrapper: {
+        borderRadius: 8,
+        borderBottomWidth: 4,
+        overflow: 'hidden',
+    },
     wineImage: {
         width: 80,
         height: 120,
-        borderRadius: 8,
         backgroundColor: '#f9f9f9',
-        marginRight: 12,
     },
     wineImagePlaceholder: {
         width: 80,
         height: 120,
-        borderRadius: 8,
         backgroundColor: '#f9f9f9',
-        marginRight: 12,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
@@ -526,65 +587,96 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'space-between',
     },
-    nameRow: {
+    headerRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
         justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 6,
     },
-    wineName: {
-        fontSize: 16,
-        marginBottom: 2,
-        color: '#2c2c2c',
-        fontWeight: '700',
-        lineHeight: 20,
+    nameColumn: {
         flex: 1,
         marginRight: 8,
     },
-    lowStockBadge: {
-        backgroundColor: '#FF6B6B',
-        color: '#fff',
-        fontSize: 12,
+    wineName: {
+        fontSize: 16,
+        color: '#2c2c2c',
+        fontWeight: '700',
+        marginBottom: 2,
+        lineHeight: 20,
     },
     winery: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#8B2E2E',
-        marginBottom: 8,
         fontWeight: '600',
     },
-    details: {
+    quantityBadge: {
         flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f5f5f5',
+        borderRadius: 16,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    quantityText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2c2c2c',
+    },
+    quantityX: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#666',
+        marginRight: 2,
+    },
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         flexWrap: 'wrap',
-        marginBottom: 6,
+        marginBottom: 4,
+        gap: 12,
+    },
+    metaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: 4,
     },
-    chip: {
-        backgroundColor: '#f5f5f5',
-    },
-    typeChip: {
-        backgroundColor: '#f5f5f5',
-    },
-    chipText: {
-        color: '#fff',
-        fontSize: 11,
-    },
-    chipQuantity: {
-        backgroundColor: '#FFD700',
-    },
-    varietal: {
+    metaText: {
         fontSize: 12,
         color: '#666',
-        marginBottom: 4,
-        fontStyle: 'italic',
+        fontWeight: '500',
+    },
+    locationRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: 6,
     },
     location: {
         fontSize: 12,
         color: '#666',
+        flex: 1,
+    },
+    lowStockChip: {
+        backgroundColor: '#FFEBEE',
+        height: 24,
+        alignSelf: 'flex-start',
         marginBottom: 6,
+    },
+    lowStockText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#D32F2F',
+        lineHeight: 24,
     },
     bottomRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+    },
+    leftBottomSection: {
+        flex: 1,
     },
     value: {
         fontSize: 15,
@@ -596,7 +688,7 @@ const styles = StyleSheet.create({
         color: '#666',
         fontWeight: '600',
     },
-    // Grid view styles
+    // Grid Card Styles with colored banner
     gridCardContainer: {
         width: '48%',
         marginBottom: 12,
@@ -630,12 +722,42 @@ const styles = StyleSheet.create({
         borderColor: '#e0e0e0',
         borderStyle: 'dashed',
     },
-    gridLowStockBadge: {
+    typeBanner: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 6,
+    },
+    gridQuantityBadge: {
         position: 'absolute',
         top: 8,
         right: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 16,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    gridQuantityText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#2c2c2c',
+    },
+    gridQuantityX: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#666',
+        marginRight: 2,
+    },
+    gridLowStockBadge: {
         backgroundColor: '#FF6B6B',
         color: '#fff',
+        alignSelf: 'flex-start',
+        marginTop: 4,
     },
     gridCardContent: {
         padding: 12,
@@ -648,23 +770,38 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         lineHeight: 18,
     },
-    gridVintage: {
-        fontSize: 12,
-        color: '#8B2E2E',
-        marginBottom: 6,
-        fontWeight: '600',
-    },
-    gridDetails: {
+    gridMetaRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 4,
         marginBottom: 6,
+        gap: 8,
+    },
+    gridMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+    },
+    gridMetaText: {
+        fontSize: 11,
+        color: '#666',
+        fontWeight: '500',
+    },
+    gridBottomRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 4,
     },
     gridValue: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#2E7D32',
         fontWeight: '700',
-        marginTop: 4,
+    },
+    gridRating: {
+        fontSize: 12,
+        color: '#666',
+        fontWeight: '600',
     },
     empty: {
         padding: 48,

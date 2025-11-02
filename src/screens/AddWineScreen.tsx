@@ -420,7 +420,7 @@ export default function AddWineScreen({ navigation, route }: Props) {
                     <Button
                         mode="outlined"
                         onPress={() => setShowVarietalSelector(true)}
-                        icon={formData.varietalId ? "check-circle" : "fruit-grapes"}
+                        icon="fruit-grapes"
                         style={styles.varietalButton}
                     >
                         {formData.varietalName || 'Select Varietal'}

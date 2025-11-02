@@ -47,6 +47,12 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
         return colors[type] || '#666';
     };
 
+    const getTypeTextColor = (type: string) => {
+        // Use dark text for light backgrounds, light text for dark backgrounds
+        const darkTextTypes = ['WHITE', 'ROSE', 'ORANGE', 'DESSERT'];
+        return darkTextTypes.includes(type) ? '#2c2c2c' : getTypeColor(type);
+    };
+
     return (
         <TouchableOpacity onPress={onPress}>
             <Card style={styles.card}>
@@ -56,8 +62,8 @@ const VarietalCard = React.memo(({ varietal, onPress }: { varietal: Varietal; on
                         <Chip
                             mode="flat"
                             compact
-                            style={[styles.typeChip, { backgroundColor: getTypeColor(varietal.type) + '20' }]}
-                            textStyle={[styles.typeChipText, { color: getTypeColor(varietal.type) }]}
+                            style={{ backgroundColor: getTypeColor(varietal.type) + '20' }}
+                            textStyle={[styles.typeChipText, { color: getTypeTextColor(varietal.type) }]}
                         >
                             {varietal.type}
                         </Chip>
@@ -130,8 +136,6 @@ export default function VarietalsScreen() {
     });
 
     const varietals: Varietal[] = data?.varietals || [];
-
-    console.log('Varietals data:', varietals[0]);
 
     // Filter varietals by search query
     const filteredVarietals = varietals.filter(varietal =>
@@ -336,9 +340,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         flex: 1,
         marginRight: 8,
-    },
-    typeChip: {
-        height: 28,
     },
     typeChipText: {
         fontSize: 11,
